@@ -1,0 +1,75 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Roborock Mower Account",
+        "description": "Enter your Roborock account email to receive a verification code.",
+        "data": {
+          "username": "Email",
+          "region": "Region"
+        }
+      },
+      "code": {
+        "title": "Verification Code",
+        "description": "Enter the verification code sent to your email.",
+        "data": {
+          "code": "Code"
+        }
+      }
+    },
+    "error": {
+      "invalid_email": "Account does not exist",
+      "invalid_email_format": "Invalid email format",
+      "invalid_code": "Invalid verification code",
+      "invalid_email_or_region": "Invalid email or region",
+      "too_frequent_code_requests": "Too many code requests, try again later",
+      "unknown_url": "Unknown URL error",
+      "unknown_roborock": "Unknown Roborock error",
+      "unknown": "Unknown error",
+      "no_mower_devices": "No mower devices found on this account"
+    },
+    "abort": {
+      "already_configured_account": "This account is already configured"
+    }
+  },
+  "selector": {
+    "region": {
+      "options": {
+        "auto": "Auto",
+        "us": "United States",
+        "eu": "Europe",
+        "ru": "Russia",
+        "cn": "China"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery": {
+        "name": "Battery"
+      },
+      "mow_progress": {
+        "name": "Mow Progress"
+      },
+      "charge_state": {
+        "name": "Charge State"
+      },
+      "error_code": {
+        "name": "Error Code"
+      },
+      "mow_state": {
+        "name": "Mow State"
+      }
+    },
+    "number": {
+      "mow_height": {
+        "name": "Mow Height"
+      }
+    },
+    "select": {
+      "mow_eff_mode": {
+        "name": "Efficiency Mode"
+      }
+    }
+  }
+}

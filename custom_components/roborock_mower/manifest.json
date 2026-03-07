@@ -1,0 +1,12 @@
+{
+  "domain": "roborock_mower",
+  "name": "Roborock Mower",
+  "codeowners": ["@christiantroldmand"],
+  "config_flow": true,
+  "documentation": "https://github.com/christiantroldmand/Roborock-mower-support-preview",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/christiantroldmand/Roborock-mower-support-preview/issues",
+  "requirements": ["python-roborock>=4.17.0"],
+  "version": "0.1.0"
+}
