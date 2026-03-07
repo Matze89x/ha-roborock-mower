@@ -7,9 +7,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from roborock.data.containers import HomeDataProduct
+from roborock.exceptions import RoborockUnsupportedFeature
 from roborock.protocols.v1_protocol import V1RpcChannel
 
 _LOGGER = logging.getLogger(__name__)
+
+# Mower firmware may use different method names than vacuums. Try these in order.
+START_METHODS = ("app_start_mow", "app_mow_start", "app_start")
+STOP_METHODS = ("app_stop_mow", "app_mow_stop", "app_stop")
+PAUSE_METHODS = ("app_pause_mow", "app_mow_pause", "app_pause")
+DOCK_METHODS = ("app_dock", "app_charge")
 
 
 @dataclass
@@ -49,6 +56,24 @@ class MowerApi:
     def product(self) -> HomeDataProduct:
         return self._product
 
+    async def _send_command_with_fallback(
+        self, method_tuples: tuple[str, ...], params: dict | list | None = None
+    ) -> Any:
+        """Send a command, trying multiple method names until one is accepted."""
+        last_error: Exception | None = None
+        for method in method_tuples:
+            try:
+                return await self._rpc_channel.send_command(
+                    method, params=params
+                )
+            except RoborockUnsupportedFeature as e:
+                last_error = e
+                _LOGGER.debug("Method %s not recognized, trying next: %s", method, e)
+                continue
+        if last_error:
+            raise last_error
+        return None
+
     async def refresh(self) -> MowerStatus:
         """Fetch current mower status."""
         try:
@@ -83,23 +108,28 @@ class MowerApi:
 
     async def start(self) -> Any:
         """Start mowing."""
-        return await self._rpc_channel.send_command("app_start")
+        return await self._send_command_with_fallback(START_METHODS)
 
     async def stop(self) -> Any:
         """Stop mowing."""
-        return await self._rpc_channel.send_command("app_stop")
+        return await self._send_command_with_fallback(STOP_METHODS)
 
     async def pause(self) -> Any:
         """Pause mowing."""
-        return await self._rpc_channel.send_command("app_pause")
+        return await self._send_command_with_fallback(PAUSE_METHODS)
 
     async def resume(self) -> Any:
-        """Resume mowing."""
-        return await self._rpc_channel.send_command("app_resume")
+        """Resume mowing (try pause-related resume then start)."""
+        for method in ("app_resume_mow", "app_mow_resume", "app_resume"):
+            try:
+                return await self._rpc_channel.send_command(method)
+            except RoborockUnsupportedFeature:
+                continue
+        return await self._send_command_with_fallback(START_METHODS)
 
     async def dock(self) -> Any:
         """Return to dock."""
-        return await self._rpc_channel.send_command("app_dock")
+        return await self._send_command_with_fallback(DOCK_METHODS)
 
     async def set_mow_height(self, height: int) -> Any:
         """Set mowing height."""
