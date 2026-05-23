@@ -392,6 +392,46 @@ async def run_once(channel, web_api, device, product, args: list[str]) -> None:
         for f in frames:
             log(f"  {f.name}: {f.stat().st_size} bytes")
         return
+    if cmd == "mapmow":
+        secs = int(args[1]) if len(args) > 1 and args[1].isdigit() else 20
+        await channel.rpc_channel.send_command(
+            "remote_pb",
+            params={
+                "id": str(int(time.time() * 1000)),
+                "type": "APP_BUTTON",
+                "app_button": "MOW_GLOBAL",
+            },
+        )
+        log("started mow; capturing map frames from frame 0...")
+        await asyncio.sleep(secs)
+        dock = json.dumps({"dps": {"202": 1}, "t": int(time.time())}).encode()
+        await channel._mqtt_channel.publish(
+            RoborockMessage(
+                protocol=RoborockMessageProtocol.RPC_REQUEST, payload=dock, version=b"1.0"
+            )
+        )
+        log("dock sent")
+        frames = sorted(MAP_DUMP_DIR.glob("*.bin")) if MAP_DUMP_DIR.exists() else []
+        log(f"Captured {len(frames)} frames:")
+        for f in frames:
+            log(f"  {f.name}: {f.stat().st_size} bytes")
+        return
+    if cmd == "mapfetch":
+        method = args[1] if len(args) > 1 else "get_map_v1"
+        log(f"\nmap_rpc_channel.send_command({method!r})")
+        try:
+            result = await channel.map_rpc_channel.send_command(method)
+        except Exception as err:  # noqa: BLE001
+            log(f"  error -> {type(err).__name__}: {err}")
+            return
+        if isinstance(result, (bytes, bytearray)):
+            MAP_DUMP_DIR.mkdir(exist_ok=True)
+            out = MAP_DUMP_DIR / f"fullmap_{method}.bin"
+            out.write_bytes(result)
+            log(f"  -> {len(result)} bytes (decoded map) saved to {out}")
+        else:
+            log(f"  -> {_dumps(result)}")
+        return
     if cmd == "setheight":
         height = int(args[1])
         payload = {
