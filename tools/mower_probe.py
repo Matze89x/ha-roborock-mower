@@ -44,6 +44,7 @@ SESSION_FILE = REPO_ROOT / ".mower_session.json"
 CAPTURE_LOG = Path(__file__).resolve().parent / "mower_capture.log"
 
 _LOGGER = logging.getLogger("mower_probe")
+MAP_DUMP_DIR = Path(__file__).resolve().parent / "map_dump"
 
 MENU = """
 Commands:
@@ -373,6 +374,24 @@ async def run_once(channel, web_api, device, product, args: list[str]) -> None:
             log(f"  result -> {_dumps(result)}")
         await asyncio.sleep(10)
         return
+    if cmd == "mapdump":
+        secs = int(args[1]) if len(args) > 1 and args[1].isdigit() else 30
+        for map_type in ("GET_FULL_MAP", "START_GET_INC_MAP"):
+            try:
+                await channel.rpc_channel.send_command(
+                    "remote_pb",
+                    params={"id": str(int(time.time() * 1000)), "type": map_type},
+                )
+                log(f"requested {map_type}")
+            except Exception as err:  # noqa: BLE001
+                log(f"  {map_type} error: {err}")
+        log(f"Capturing map frames for {secs}s to {MAP_DUMP_DIR} ...")
+        await asyncio.sleep(secs)
+        frames = sorted(MAP_DUMP_DIR.glob("*.bin")) if MAP_DUMP_DIR.exists() else []
+        log(f"Captured {len(frames)} map frames:")
+        for f in frames:
+            log(f"  {f.name}: {f.stat().st_size} bytes")
+        return
     if cmd == "setheight":
         height = int(args[1])
         payload = {
@@ -437,6 +456,15 @@ async def main() -> None:
             log(f"[PUSH] {message!r}")
             payload = getattr(message, "payload", None)
             if not payload:
+                return
+            try:
+                proto_num = int(getattr(message, "protocol", -1))
+            except (TypeError, ValueError):
+                proto_num = -1
+            if proto_num in (6, 7, 301):
+                MAP_DUMP_DIR.mkdir(exist_ok=True)
+                idx = len(list(MAP_DUMP_DIR.glob("*.bin")))
+                (MAP_DUMP_DIR / f"frame_{idx:03d}_p{proto_num}.bin").write_bytes(payload)
                 return
             try:
                 data = json.loads(payload.decode())

@@ -14,3 +14,5 @@ venv/
 
 # Local reverse-engineering session (contains auth tokens) -- never commit
 .mower_session.json
+# Captured map frames (may contain location/position data)
+tools/map_dump/
