@@ -17,7 +17,8 @@ The official Roborock integration does not yet support mower devices. This integ
 - **Mow Mode sensor** -- full mow vs edge cut
 - **Mow State / Charge State / Error Code sensors** -- raw status values from the device
 - **Routine buttons** -- any Roborock routines/scenes you create for the mower appear as buttons
-- **Mow Height** and **Efficiency Mode** controls (experimental)
+- **Mow Height** control (sets cutting height via the `remote_pb` command)
+- **Efficiency Mode** selector (experimental)
 
 ## Mowing
 

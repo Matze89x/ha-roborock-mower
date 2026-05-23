@@ -188,23 +188,24 @@ class MowerApi:
         # V1Channel exposes no public raw-publish; its MQTT sub-channel sends the dp write.
         await self._channel._mqtt_channel.publish(message)  # noqa: SLF001
 
-    async def _send_remote(self, app_button: str) -> Any:
-        """Send a RemoteMsg command via the remote_pb RPC (start / edge cut)."""
-        message = {
-            "id": str(int(time.time() * 1000)),
-            "type": "APP_BUTTON",
-            "app_button": app_button,
-        }
-        _LOGGER.debug("[%s] remote_pb %s", self._duid, app_button)
+    async def _send_remote_msg(self, payload: dict[str, Any]) -> Any:
+        """Send a RemoteMsg (a `type` plus its value field) via the remote_pb RPC."""
+        message = {"id": str(int(time.time() * 1000)), **payload}
+        _LOGGER.debug("[%s] remote_pb %s", self._duid, payload.get("type"))
         return await self._channel.rpc_channel.send_command("remote_pb", params=message)
+
+    async def _send_button(self, app_button: str) -> Any:
+        return await self._send_remote_msg(
+            {"type": "APP_BUTTON", "app_button": app_button}
+        )
 
     async def start(self) -> Any:
         """Start a full-lawn mow."""
-        return await self._send_remote("MOW_GLOBAL")
+        return await self._send_button("MOW_GLOBAL")
 
     async def edge_cut(self) -> Any:
         """Start an edge cut."""
-        return await self._send_remote("MOW_EDGE")
+        return await self._send_button("MOW_EDGE")
 
     async def stop(self) -> None:
         await self._write_dps(DPS_STOP, 1)
@@ -218,10 +219,21 @@ class MowerApi:
     async def dock(self) -> None:
         await self._write_dps(DPS_DOCK, 1)
 
-    async def set_mow_height(self, height: int) -> None:
-        await self._write_dps(DPS_MOW_HEIGHT, height)
+    async def set_mow_height(self, height: int) -> Any:
+        """Set cutting height via the remote_pb REMOTE_CMD command."""
+        return await self._send_remote_msg(
+            {
+                "type": "REMOTE_CMD",
+                "remote_cmd": {
+                    "type": "MAIN_CUTTER_HEIGHT",
+                    "main_cutter_height": height,
+                },
+            }
+        )
 
     async def set_mow_eff_mode(self, mode: int) -> None:
+        # NOTE: efficiency mode is part of the mow_preference config sent via
+        # SET_MOW_PREFERENCE; this dps write is a placeholder pending that schema.
         await self._write_dps(DPS_MOW_EFF_MODE, mode)
 
     async def get_routines(self) -> list[HomeDataScene]:

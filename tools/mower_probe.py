@@ -362,6 +362,33 @@ async def run_once(channel, web_api, device, product, args: list[str]) -> None:
             log(f"  result -> {_dumps(result)}")
         await asyncio.sleep(5)
         return
+    if cmd == "getfullmap":
+        payload = {"id": str(int(time.time() * 1000)), "type": "GET_FULL_MAP"}
+        log(f"\nGET_FULL_MAP {payload}")
+        try:
+            result = await channel.rpc_channel.send_command("remote_pb", params=payload)
+        except Exception as err:  # noqa: BLE001
+            log(f"  error -> {type(err).__name__}: {err}")
+        else:
+            log(f"  result -> {_dumps(result)}")
+        await asyncio.sleep(10)
+        return
+    if cmd == "setheight":
+        height = int(args[1])
+        payload = {
+            "id": str(int(time.time() * 1000)),
+            "type": "REMOTE_CMD",
+            "remote_cmd": {"type": "MAIN_CUTTER_HEIGHT", "main_cutter_height": height},
+        }
+        log(f"\nset height={height} -> {payload}")
+        try:
+            result = await channel.rpc_channel.send_command("remote_pb", params=payload)
+        except Exception as err:  # noqa: BLE001
+            log(f"  error -> {type(err).__name__}: {err}")
+        else:
+            log(f"  result -> {_dumps(result)}")
+        await asyncio.sleep(5)
+        return
     if cmd == "poll":
         secs = int(args[1]) if len(args) > 1 and args[1].isdigit() else 60
         interval = float(args[2]) if len(args) > 2 else 3.0
