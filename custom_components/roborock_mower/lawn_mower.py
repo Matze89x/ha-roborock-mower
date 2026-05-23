@@ -80,13 +80,6 @@ class RoborockLawnMowerEntity(RoborockMowerEntity, LawnMowerEntity):
         if self.status.mow_state == MOW_STATE_PAUSED:
             await self.coordinator.mower_api.resume()
         else:
-            # The device needs the app's task payload (map/zone selection) to
-            # begin a fresh mow, which can't be reproduced here; this is a no-op
-            # on current firmware. Start a new mow from the Roborock app.
-            _LOGGER.warning(
-                "Starting a new mow from Home Assistant is not supported; "
-                "start it from the Roborock app. (Pause/resume/dock work.)"
-            )
             await self.coordinator.mower_api.start()
         await self.coordinator.async_request_refresh()
 

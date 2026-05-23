@@ -159,27 +159,38 @@ parse the raw `payload["dps"]` yourself — see `parse_dps_push()` in `mower_api
 
 ---
 
-## 5. The `start` limitation (start / edge cut / zone mowing)
+## 5. Start / edge cut — the `remote_pb` command
 
-`start` (DPS 201) is `VALUE`-typed and ignores plain values — the app sends a
-**structured task payload** that selects the map/zone. Edge cut and zone mowing are
-the *same* start with different payloads (edge cut shows up as `mow_type = 2`). Every
-remote route to obtain that payload has been ruled out:
+Start, edge cut, and area mowing are **not** DPS writes (scalar DPS-201 writes are a
+no-op — that earlier dead end). The app sends a `rock.common.remote.RemoteMsg` protobuf
+via the RPC method **`remote_pb`**. We send it as the protobuf's JSON form (protobufjs
+`toJSON`: string enum names, id as string):
 
-- RPC methods (`app_start`, `app_start_mow`, …) → `unknown_method`.
-- Raw DPS `201` with scalar values → no-op.
-- Subscribing to the device input topic to sniff the app's command → blocked by broker ACL.
-- Roborock **routines/scenes** → API works (`get_routines`/`execute_routine`) but none
-  are defined for the device, and the mower may not support creating them.
+```python
+rpc_channel.send_command("remote_pb", params={
+    "id": str(int(time.time() * 1000)),
+    "type": "APP_BUTTON",
+    "app_button": "MOW_GLOBAL",   # MOW_EDGE = edge cut, MOW_SELECT = area
+})
+# -> ["ok"]  (mower acts);  ["fail"] = rejected
+```
 
-So **starting a new mow must be done from the Roborock app.** Home Assistant handles
-status, pause, resume, dock, and automations. If you create routines in the app, they
-appear as buttons (see `button.py`).
+`RemoteMsg` fields: `id` (uint64 ms), `type` (enum, `APP_BUTTON`), `app_button` (enum:
+`MOW_GLOBAL` / `MOW_EDGE` / `MOW_SELECT`), `modify_map` (a `Map` with `boundaries[]`,
+for area/edge selection). **Confirmed live:** `MOW_GLOBAL` starts a full-lawn mow;
+`MOW_EDGE` starts an edge cut (`mow_type`→2 when started from the dock). This is why
+scalar DPS-201 failed — the firmware wants this `remote_pb` protobuf RPC. The schema is
+defined in the decompiled app (`rock.iot.*` / `rock.common.*` in `module_879.js` of the
+[Python-roborock/RR_API](https://github.com/Python-roborock/RR_API) repo); call sites
+are in `module_877.js` (`startGlobalMowing`/`startEdgeMowing`).
 
-**To unlock start/edge/zones in the future:** capture the app's traffic (the device
-`local_key` is available in `home_data`, so captured MQTT can be decrypted), extract
-the DPS 201 payload, and replicate it. The map/zones are in the protobuf map stream
-(`protocol` 6/7, `PB…`-prefixed) which would also need parsing.
+Because `remote_pb` is an RPC, the integration uses the **V1 channel**
+(`create_v1_channel(...).rpc_channel.send_command`), not a bare `MqttChannel`. Pause /
+resume / dock / stop still go through DPS writes (via the channel's MQTT sub-channel).
+
+**Area / zone mowing** needs `MOW_SELECT` + `modify_map.boundaries` (saved-map zone
+ids) — still requires parsing the protobuf map (the `protocol` 6/7 `PB…` stream). The
+Roborock-app **routines** path also remains available (see `button.py`).
 
 ---
 

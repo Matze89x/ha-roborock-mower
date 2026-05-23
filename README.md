@@ -10,7 +10,8 @@ The official Roborock integration does not yet support mower devices. This integ
 
 ## Features
 
-- **Lawn Mower entity** -- pause, resume, and return-to-dock, with live activity (mowing / paused / docked / error)
+- **Lawn Mower entity** -- start (full-lawn mow), pause, resume, and return-to-dock, with live activity (mowing / paused / docked / error)
+- **Edge Cut button** -- start a perimeter / edge cut
 - **Battery sensor** -- current battery percentage
 - **Mow Progress sensor** -- completion percentage of the current session
 - **Mow Mode sensor** -- full mow vs edge cut
@@ -18,15 +19,14 @@ The official Roborock integration does not yet support mower devices. This integ
 - **Routine buttons** -- any Roborock routines/scenes you create for the mower appear as buttons
 - **Mow Height** and **Efficiency Mode** controls (experimental)
 
-## Starting a mow
+## Mowing
 
-Starting a *new* mow -- including edge cut and zone mowing -- must be initiated from the
-**Roborock app**. The mower requires a task payload (selecting the map/zone) that this
-integration cannot reproduce, so a "start" from Home Assistant has no effect from the dock.
-Home Assistant can **pause, resume, return-to-dock**, and report live status of an
-in-progress mow. A common setup is to schedule mows in the Roborock app and use Home
-Assistant for monitoring, pausing, docking, and automations. If you create **routines**
-in the Roborock app, they appear as buttons you can trigger from Home Assistant.
+Start a **full-lawn mow** from the lawn mower entity's *Start* action, and an **edge cut**
+from the **Edge Cut** button. Both are sent using the same `remote_pb` protobuf command the
+official app uses (reverse-engineered). Pause, resume, and return-to-dock also work from
+Home Assistant. **Area / zone mowing** (a specific saved zone) still needs to be started
+from the Roborock app, since it requires selecting saved map boundaries -- and any
+**routines** you create in the app appear here as buttons.
 
 ## Requirements
 
@@ -68,9 +68,10 @@ The Roborock mower has no official Home Assistant support and no public API, so 
 integration was built by reverse-engineering the device. It is a Roborock **V1** device
 that exposes status and control through Tuya **data points (DPS)** rather than the RPC
 commands used by vacuums. Status is read from the device's data points (with live MQTT
-push and a periodic cloud snapshot); pause / resume / dock are sent as DPS writes.
-Unknown state codes are logged as warnings so they can be reported and mapped in future
-updates.
+push and a periodic cloud snapshot). Pause / resume / dock are sent as DPS writes, while
+start and edge cut use the app's `remote_pb` protobuf RPC (`RemoteMsg` with an
+`APP_BUTTON` action). Unknown state codes are logged as warnings so they can be reported
+and mapped in future updates.
 
 ## Development
 

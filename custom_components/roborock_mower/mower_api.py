@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from roborock.data.containers import HomeDataProduct, HomeDataScene
-from roborock.devices.transport.mqtt_channel import MqttChannel
+from roborock.devices.rpc.v1_channel import V1Channel
 from roborock.roborock_message import RoborockMessage, RoborockMessageProtocol
 from roborock.web_api import UserWebApiClient
 
@@ -140,7 +140,7 @@ class MowerApi:
     def __init__(
         self,
         product: HomeDataProduct,
-        channel: MqttChannel,
+        channel: V1Channel,
         web_api: UserWebApiClient,
         duid: str,
         initial_dps: dict[Any, Any] | None = None,
@@ -185,10 +185,26 @@ class MowerApi:
             version=b"1.0",
         )
         _LOGGER.debug("[%s] DPS write %s=%s", self._duid, dps_id, value)
-        await self._channel.publish(message)
+        # V1Channel exposes no public raw-publish; its MQTT sub-channel sends the dp write.
+        await self._channel._mqtt_channel.publish(message)  # noqa: SLF001
 
-    async def start(self) -> None:
-        await self._write_dps(DPS_START, 1)
+    async def _send_remote(self, app_button: str) -> Any:
+        """Send a RemoteMsg command via the remote_pb RPC (start / edge cut)."""
+        message = {
+            "id": str(int(time.time() * 1000)),
+            "type": "APP_BUTTON",
+            "app_button": app_button,
+        }
+        _LOGGER.debug("[%s] remote_pb %s", self._duid, app_button)
+        return await self._channel.rpc_channel.send_command("remote_pb", params=message)
+
+    async def start(self) -> Any:
+        """Start a full-lawn mow."""
+        return await self._send_remote("MOW_GLOBAL")
+
+    async def edge_cut(self) -> Any:
+        """Start an edge cut."""
+        return await self._send_remote("MOW_EDGE")
 
     async def stop(self) -> None:
         await self._write_dps(DPS_STOP, 1)

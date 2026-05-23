@@ -31,19 +31,35 @@ async def async_setup_entry(
 ) -> None:
     """Set up a button for each app-defined routine on each mower."""
     coordinators: list[RoborockMowerCoordinator] = hass.data[DOMAIN][entry.entry_id]
-    entities: list[RoborockRoutineButton] = []
+    entities: list[ButtonEntity] = []
     for coordinator in coordinators:
+        entities.append(RoborockEdgeCutButton(coordinator))
         try:
             routines = await coordinator.mower_api.get_routines()
         except RoborockException as err:
             _LOGGER.warning(
                 "Could not fetch routines for %s: %s", coordinator.device.duid, err
             )
-            continue
+            routines = []
         entities.extend(
             RoborockRoutineButton(coordinator, routine) for routine in routines
         )
     async_add_entities(entities)
+
+
+class RoborockEdgeCutButton(RoborockMowerEntity, ButtonEntity):
+    """Starts an edge cut (perimeter mow) via the remote_pb command."""
+
+    _attr_translation_key = "edge_cut"
+    _attr_icon = "mdi:vector-square"
+
+    def __init__(self, coordinator: RoborockMowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._device.duid}_edge_cut"
+
+    async def async_press(self) -> None:
+        await self.coordinator.mower_api.edge_cut()
+        await self.coordinator.async_request_refresh()
 
 
 class RoborockRoutineButton(RoborockMowerEntity, ButtonEntity):

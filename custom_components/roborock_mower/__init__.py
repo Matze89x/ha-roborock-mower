@@ -7,7 +7,8 @@ from collections.abc import Callable
 from typing import Any
 
 from roborock.data import RoborockCategory, UserData
-from roborock.devices.transport.mqtt_channel import create_mqtt_channel
+from roborock.devices.cache import DeviceCache, NoCache
+from roborock.devices.rpc.v1_channel import create_v1_channel
 from roborock.exceptions import RoborockException
 from roborock.mqtt.roborock_session import create_lazy_mqtt_session
 from roborock.mqtt.session import MqttSession
@@ -77,6 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
         _LOGGER.warning("No mower devices found on account %s", username)
         raise ConfigEntryNotReady("No mower devices found on this account")
 
+    cache = NoCache()
     mqtt_params = create_mqtt_params(user_data.rriot)
     mqtt_session: MqttSession = await create_lazy_mqtt_session(mqtt_params)
 
@@ -84,7 +86,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
     unsubscribes: list[Callable[[], None]] = []
 
     for device, product in mower_devices:
-        channel = create_mqtt_channel(user_data, mqtt_params, mqtt_session, device)
+        device_cache = DeviceCache(device.duid, cache)
+        channel = create_v1_channel(
+            user_data, mqtt_params, mqtt_session, device, device_cache
+        )
         mower_api = MowerApi(
             product, channel, web_api, device.duid, device.device_status
         )

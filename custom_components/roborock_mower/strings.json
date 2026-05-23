@@ -73,6 +73,11 @@
       "mow_eff_mode": {
         "name": "Efficiency Mode"
       }
+    },
+    "button": {
+      "edge_cut": {
+        "name": "Edge Cut"
+      }
     }
   }
 }

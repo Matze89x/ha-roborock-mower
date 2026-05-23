@@ -21,6 +21,7 @@ also appended to tools/mower_capture.log so you can share it.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import sys
@@ -235,6 +236,30 @@ async def poll(channel, secs: int, interval: float) -> None:
         await asyncio.sleep(interval)
 
 
+def _proto_varint(value: int) -> bytes:
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
+
+
+def _encode_remote_msg(app_button: int, msg_type: int = 6) -> bytes:
+    """RemoteMsg: field1 id (uint64 ms), field2 type (enum, APP_BUTTON=6), field5 app_button."""
+    return (
+        b"\x08"
+        + _proto_varint(int(time.time() * 1000))
+        + b"\x10"
+        + _proto_varint(msg_type)
+        + b"\x28"
+        + _proto_varint(app_button)
+    )
+
+
 def _parse_value(raw: str):
     try:
         return int(raw)
@@ -315,6 +340,27 @@ async def run_once(channel, web_api, device, product, args: list[str]) -> None:
         return
     if cmd == "dpsset":
         await dpsset(channel, int(args[1]), _parse_value(args[2]))
+        return
+    if cmd == "remotepb":
+        button: object = args[1]
+        if isinstance(button, str) and button.lstrip("-").isdigit():
+            button = int(button)
+        fmt = args[2] if len(args) > 2 else "json"
+        msg = {"id": str(int(time.time() * 1000)), "type": "APP_BUTTON", "app_button": button}
+        if fmt == "b64":
+            params: object = [base64.b64encode(_encode_remote_msg(int(button))).decode()]
+        elif fmt == "list":
+            params = [msg]
+        else:
+            params = msg
+        log(f"\nremote_pb fmt={fmt} params={params!r}")
+        try:
+            result = await channel.rpc_channel.send_command("remote_pb", params=params)
+        except Exception as err:  # noqa: BLE001
+            log(f"  error -> {type(err).__name__}: {err}")
+        else:
+            log(f"  result -> {_dumps(result)}")
+        await asyncio.sleep(5)
         return
     if cmd == "poll":
         secs = int(args[1]) if len(args) > 1 and args[1].isdigit() else 60
