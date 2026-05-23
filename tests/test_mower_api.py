@@ -36,7 +36,7 @@ REAL_DEVICE_STATUS = {
     "135": 0,
     "138": 0,
     "139": 55,
-    "142": "<redacted-gps>",
+    "142": "<redacted-gps>",  # real value is a base64 protobuf of the mower's position
     "143": 0,
     "144": 0,
     "145": 1,

@@ -72,6 +72,12 @@ push and a periodic cloud snapshot); pause / resume / dock are sent as DPS write
 Unknown state codes are logged as warnings so they can be reported and mapped in future
 updates.
 
+## Development
+
+For the architecture, the reverse-engineered **Tuya DPS** protocol (full data-point
+map, state codes, command mechanism), the integration's data flow, the probe tool, and
+how to set up a dev environment, see **[DEVELOPING.md](DEVELOPING.md)**.
+
 ## License
 
 This project is provided as-is for community use.
