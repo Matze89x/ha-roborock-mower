@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.lawn_mower import (
     LawnMowerActivity,
@@ -20,34 +19,27 @@ from .entity import RoborockMowerEntity
 
 _LOGGER = logging.getLogger(__name__)
 
-# Best-effort mapping; unknown values are logged for future refinement
-MOW_STATE_MOWING = 1
-MOW_STATE_PAUSED = 2
-MOW_STATE_ERROR = 3
-MOW_STATE_RETURNING = 4
-MOW_STATE_CHARGING = 5
+# mow_state (DPS 123), confirmed live: 0=idle/docked, 51=transient,
+# 56/57=mowing, 58=paused. Active task codes vary, so treat any non-idle,
+# non-paused value as mowing rather than enumerating each one.
 MOW_STATE_IDLE = 0
+MOW_STATE_PAUSED = 58
 
 
 def _derive_activity(
     mow_state: int | None,
-    charge_state: int | None,
     error_code: int | None,
+    off_dock_no_task_status: int | None,
 ) -> LawnMowerActivity:
-    if error_code is not None and error_code != 0:
+    if error_code:
         return LawnMowerActivity.ERROR
-    if mow_state == MOW_STATE_MOWING:
-        return LawnMowerActivity.MOWING
     if mow_state == MOW_STATE_PAUSED:
         return LawnMowerActivity.PAUSED
-    if mow_state == MOW_STATE_RETURNING:
+    if mow_state not in (None, MOW_STATE_IDLE):
         return LawnMowerActivity.MOWING
-    if charge_state is not None and charge_state > 0:
-        return LawnMowerActivity.DOCKED
-    if mow_state == MOW_STATE_IDLE:
-        return LawnMowerActivity.DOCKED
-    if mow_state is not None:
-        _LOGGER.warning("Unknown mow_state %s, defaulting to DOCKED", mow_state)
+    # Idle mow_state but off the dock with no task means returning to dock.
+    if off_dock_no_task_status:
+        return LawnMowerActivity.MOWING
     return LawnMowerActivity.DOCKED
 
 
@@ -80,12 +72,22 @@ class RoborockLawnMowerEntity(RoborockMowerEntity, LawnMowerEntity):
     def activity(self) -> LawnMowerActivity:
         return _derive_activity(
             self.status.mow_state,
-            self.status.charge_state,
             self.status.error_code,
+            self.status.off_dock_no_task_status,
         )
 
     async def async_start_mowing(self) -> None:
-        await self.coordinator.mower_api.start()
+        if self.status.mow_state == MOW_STATE_PAUSED:
+            await self.coordinator.mower_api.resume()
+        else:
+            # The device needs the app's task payload (map/zone selection) to
+            # begin a fresh mow, which can't be reproduced here; this is a no-op
+            # on current firmware. Start a new mow from the Roborock app.
+            _LOGGER.warning(
+                "Starting a new mow from Home Assistant is not supported; "
+                "start it from the Roborock app. (Pause/resume/dock work.)"
+            )
+            await self.coordinator.mower_api.start()
         await self.coordinator.async_request_refresh()
 
     async def async_pause(self) -> None:

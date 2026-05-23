@@ -28,6 +28,16 @@ class RoborockMowerSensorDescription(SensorEntityDescription):
     value_fn: Callable[[MowerStatus], Any]
 
 
+# mow_type (DPS 122): 1=full mow, 2=edge cut (confirmed live), 0=idle/no task.
+_MOW_TYPE_LABELS = {0: "idle", 1: "full_mow", 2: "edge_cut"}
+
+
+def _mow_type_label(status: MowerStatus) -> str | None:
+    if status.mow_type is None:
+        return None
+    return _MOW_TYPE_LABELS.get(status.mow_type, str(status.mow_type))
+
+
 SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     RoborockMowerSensorDescription(
         key="battery",
@@ -62,6 +72,12 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
         translation_key="mow_state",
         icon="mdi:robot-mower",
         value_fn=lambda s: s.mow_state,
+    ),
+    RoborockMowerSensorDescription(
+        key="mow_type",
+        translation_key="mow_type",
+        icon="mdi:vector-square",
+        value_fn=_mow_type_label,
     ),
 ]
 

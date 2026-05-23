@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from roborock.data import HomeDataDevice, HomeDataProduct
 from roborock.exceptions import RoborockException
@@ -39,15 +38,13 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
 
     async def _async_update_data(self) -> MowerStatus:
         try:
-            status = await self.mower_api.refresh()
+            status = await self.mower_api.poll_status()
         except RoborockException as err:
             raise UpdateFailed(f"Error communicating with mower: {err}") from err
         except Exception as err:
             raise UpdateFailed(f"Unexpected error: {err}") from err
 
-        if status.raw_data:
-            _LOGGER.debug(
-                "[%s] Mower status: %s", self.device.duid, status.raw_data
-            )
+        if status.raw_dps:
+            _LOGGER.debug("[%s] Mower DPS: %s", self.device.duid, status.raw_dps)
 
         return status

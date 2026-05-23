@@ -31,5 +31,9 @@ class RoborockMowerEntity(CoordinatorEntity[RoborockMowerCoordinator]):
         )
 
     @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.data is not None
+
+    @property
     def status(self) -> MowerStatus:
         return self.coordinator.data

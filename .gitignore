@@ -11,3 +11,6 @@ venv/
 .env
 *.log
 .DS_Store
+
+# Local reverse-engineering session (contains auth tokens) -- never commit
+.mower_session.json

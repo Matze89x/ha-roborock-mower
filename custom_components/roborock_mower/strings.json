@@ -59,6 +59,9 @@
       },
       "mow_state": {
         "name": "Mow State"
+      },
+      "mow_type": {
+        "name": "Mow Mode"
       }
     },
     "number": {

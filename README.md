@@ -10,12 +10,23 @@ The official Roborock integration does not yet support mower devices. This integ
 
 ## Features
 
-- **Lawn Mower entity** -- start, pause, dock with proper state mapping (mowing, paused, docked, error)
+- **Lawn Mower entity** -- pause, resume, and return-to-dock, with live activity (mowing / paused / docked / error)
 - **Battery sensor** -- current battery percentage
-- **Mow Progress sensor** -- completion percentage of current mowing session
+- **Mow Progress sensor** -- completion percentage of the current session
+- **Mow Mode sensor** -- full mow vs edge cut
 - **Mow State / Charge State / Error Code sensors** -- raw status values from the device
-- **Mow Height control** -- adjustable cutting height (number slider, mm)
-- **Efficiency Mode selector** -- Standard / Efficient / Quiet
+- **Routine buttons** -- any Roborock routines/scenes you create for the mower appear as buttons
+- **Mow Height** and **Efficiency Mode** controls (experimental)
+
+## Starting a mow
+
+Starting a *new* mow -- including edge cut and zone mowing -- must be initiated from the
+**Roborock app**. The mower requires a task payload (selecting the map/zone) that this
+integration cannot reproduce, so a "start" from Home Assistant has no effect from the dock.
+Home Assistant can **pause, resume, return-to-dock**, and report live status of an
+in-progress mow. A common setup is to schedule mows in the Roborock app and use Home
+Assistant for monitoring, pausing, docking, and automations. If you create **routines**
+in the Roborock app, they appear as buttons you can trigger from Home Assistant.
 
 ## Requirements
 
@@ -51,9 +62,15 @@ This integration can run alongside the official Roborock integration without con
 
 You will need to enter your credentials separately for each integration.
 
-## State Mapping
+## How it works
 
-The mower state values are mapped to Home Assistant lawn mower states on a best-effort basis. Unknown state codes are logged as warnings so they can be reported and added in future updates.
+The Roborock mower has no official Home Assistant support and no public API, so this
+integration was built by reverse-engineering the device. It is a Roborock **V1** device
+that exposes status and control through Tuya **data points (DPS)** rather than the RPC
+commands used by vacuums. Status is read from the device's data points (with live MQTT
+push and a periodic cloud snapshot); pause / resume / dock are sent as DPS writes.
+Unknown state codes are logged as warnings so they can be reported and mapped in future
+updates.
 
 ## License
 

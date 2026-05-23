@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from roborock.data import RoborockCategory, UserData
-from roborock.devices.cache import DeviceCache, NoCache
-from roborock.devices.rpc.v1_channel import V1Channel, create_v1_channel
+from roborock.devices.transport.mqtt_channel import create_mqtt_channel
 from roborock.exceptions import RoborockException
 from roborock.mqtt.roborock_session import create_lazy_mqtt_session
 from roborock.mqtt.session import MqttSession
@@ -18,16 +17,36 @@ from roborock.web_api import RoborockApiClient, UserWebApiClient
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import Event, HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_BASE_URL, CONF_USER_DATA, DOMAIN, PLATFORMS
 from .coordinator import RoborockMowerCoordinator
-from .mower_api import MowerApi
+from .mower_api import MowerApi, parse_dps_push
 
 _LOGGER = logging.getLogger(__name__)
 
 type MowerConfigEntry = ConfigEntry
+
+
+def _make_push_handler(
+    coordinator: RoborockMowerCoordinator, mower_api: MowerApi, duid: str
+) -> Callable[[Any], None]:
+    """Build an MQTT callback that merges live DPS pushes into the coordinator."""
+
+    def _handle(message: Any) -> None:
+        dps = parse_dps_push(message)
+        if not dps:
+            return
+
+        def _update() -> None:
+            _LOGGER.debug("[%s] DPS push: %s", duid, dps)
+            coordinator.async_set_updated_data(mower_api.apply_push(dps))
+
+        # Apply on the event loop so DPS state isn't mutated from two threads.
+        coordinator.hass.loop.call_soon_threadsafe(_update)
+
+    return _handle
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> bool:
@@ -58,33 +77,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
         _LOGGER.warning("No mower devices found on account %s", username)
         raise ConfigEntryNotReady("No mower devices found on this account")
 
-    cache = NoCache()
     mqtt_params = create_mqtt_params(user_data.rriot)
     mqtt_session: MqttSession = await create_lazy_mqtt_session(mqtt_params)
 
-    channels: list[V1Channel] = []
     coordinators: list[RoborockMowerCoordinator] = []
+    unsubscribes: list[Callable[[], None]] = []
 
     for device, product in mower_devices:
-        device_cache = DeviceCache(device.duid, cache)
-        channel = create_v1_channel(
-            user_data, mqtt_params, mqtt_session, device, device_cache
+        channel = create_mqtt_channel(user_data, mqtt_params, mqtt_session, device)
+        mower_api = MowerApi(
+            product, channel, web_api, device.duid, device.device_status
         )
-        channels.append(channel)
+        coordinator = RoborockMowerCoordinator(hass, device, product, mower_api)
 
-        await channel.subscribe(lambda msg: None)
-
-        mower_api = MowerApi(product, channel.rpc_channel)
-        coordinator = RoborockMowerCoordinator(
-            hass, device, product, mower_api
+        unsubscribes.append(
+            await channel.subscribe(
+                _make_push_handler(coordinator, mower_api, device.duid)
+            )
         )
+
         await coordinator.async_config_entry_first_refresh()
         coordinators.append(coordinator)
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinators
 
+    closed = False
+
     async def _shutdown(_: Event | None = None) -> None:
+        nonlocal closed
+        if closed:
+            return
+        closed = True
+        for unsubscribe in unsubscribes:
+            unsubscribe()
         await mqtt_session.close()
 
     entry.async_on_unload(
