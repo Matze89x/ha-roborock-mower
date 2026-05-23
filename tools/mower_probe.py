@@ -416,6 +416,83 @@ async def run_once(channel, web_api, device, product, args: list[str]) -> None:
         for f in frames:
             log(f"  {f.name}: {f.stat().st_size} bytes")
         return
+    if cmd == "getmapfull":
+        from roborock.protocol import Utils
+
+        name = args[1] if len(args) > 1 else "APP_MAP1.bin"
+        try:
+            r = await channel.rpc_channel.send_command(
+                "remote_pb",
+                params={
+                    "id": str(int(time.time() * 1000)),
+                    "type": "GET_FULL_MAP",
+                    "modify_map": {"name": name},
+                },
+            )
+            log(f"GET_FULL_MAP(name={name!r}) -> {r}")
+        except Exception as err:  # noqa: BLE001
+            log(f"  GET_FULL_MAP err: {err}")
+        log("capturing 12s for map (protocol 7/301) frames...")
+        await asyncio.sleep(12)
+        sec = channel._security_data
+        targets = sorted(MAP_DUMP_DIR.glob("*_p7.bin")) + sorted(
+            MAP_DUMP_DIR.glob("*_p301.bin")
+        )
+        log(f"map frames captured: {[t.name for t in targets]}")
+        for f in targets:
+            raw = f.read_bytes()
+            log(f"\n{f.name}: {len(raw)}b head24={raw[:24].hex()}")
+            for off in (0, 24):
+                try:
+                    dec = Utils.decrypt_cbc(raw[off:], sec.nonce)
+                    out = Utils.decompress(dec)
+                    log(f"  off={off} nonce-decrypt -> {len(out)}b head={out[:12].hex()}")
+                    (MAP_DUMP_DIR / f"{f.stem}.decoded").write_bytes(out)
+                except Exception as e:  # noqa: BLE001
+                    log(f"  off={off} nonce-decrypt failed: {type(e).__name__}: {e}")
+        return
+    if cmd == "mapgetpb":
+        await channel.rpc_channel.send_command(
+            "remote_pb",
+            params={
+                "id": str(int(time.time() * 1000)),
+                "type": "APP_BUTTON",
+                "app_button": "MOW_GLOBAL",
+            },
+        )
+        log("mow started; fetching map via the MAP channel (security_data + 301 decrypt)...")
+        await asyncio.sleep(4)
+        for method, params in (
+            (
+                "remote_pb",
+                {
+                    "id": str(int(time.time() * 1000)),
+                    "type": "GET_FULL_MAP",
+                    "modify_map": {"name": "APP_MAP1.bin"},
+                },
+            ),
+            ("get_map_v1", None),
+        ):
+            try:
+                result = await channel.map_rpc_channel.send_command(method, params=params)
+            except Exception as err:  # noqa: BLE001
+                log(f"  {method} via map channel -> {type(err).__name__}: {err}")
+                continue
+            if isinstance(result, (bytes, bytearray)):
+                MAP_DUMP_DIR.mkdir(exist_ok=True)
+                out = MAP_DUMP_DIR / f"fullmap_{method}.bin"
+                out.write_bytes(result)
+                log(f"  {method} MAP -> {len(result)} bytes decoded, saved {out.name}")
+            else:
+                log(f"  {method} -> {_dumps(result)}")
+        dock = json.dumps({"dps": {"202": 1}, "t": int(time.time())}).encode()
+        await channel._mqtt_channel.publish(
+            RoborockMessage(
+                protocol=RoborockMessageProtocol.RPC_REQUEST, payload=dock, version=b"1.0"
+            )
+        )
+        log("dock sent")
+        return
     if cmd == "mapfetch":
         method = args[1] if len(args) > 1 else "get_map_v1"
         log(f"\nmap_rpc_channel.send_command({method!r})")
