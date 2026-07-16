@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import voluptuous as vol
@@ -183,10 +182,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
     ]
 
     if not mower_devices:
-        try:
-            rr_version = version("python-roborock")
-        except PackageNotFoundError:
-            rr_version = "unknown"
         seen = [
             (
                 device.name,
@@ -196,10 +191,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
             for _duid, (device, product) in home_data.device_products.items()
         ]
         _LOGGER.warning(
-            "No mower devices found on account %s (python-roborock %s). "
-            "device_products=%s devices=%d received=%d products=%d",
+            "No mower devices found on account %s (base_url=%s). "
+            "device_products=%s devices=%d received=%d products=%d -- if the "
+            "counts are 0, the account/region this login resolved to has no "
+            "devices; re-add the integration selecting the correct region.",
             username,
-            rr_version,
+            base_url,
             seen,
             len(getattr(home_data, "devices", None) or []),
             len(getattr(home_data, "received_devices", None) or []),

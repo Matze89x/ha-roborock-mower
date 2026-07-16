@@ -6,8 +6,7 @@ dist/
 build/
 .eggs/
 *.egg
-.venv/
-.venv-ha/
+.venv*/
 venv/
 .env
 *.log
