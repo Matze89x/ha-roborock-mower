@@ -10,24 +10,34 @@ The official Roborock integration does not yet support mower devices. This integ
 
 ## Features
 
-- **Lawn Mower entity** -- start (full-lawn mow), pause, resume, and return-to-dock, with live activity (mowing / paused / docked / error)
+- **Lawn Mower entity** -- start (full-lawn mow), pause, resume, and return-to-dock, with live activity (mowing / paused / returning / docked / error)
 - **Edge Cut button** -- start a perimeter / edge cut
+- **Stop button** -- end the current mow task
+- **Cancel Dock button** -- abort an in-progress return-to-dock
 - **Battery sensor** -- current battery percentage
 - **Mow Progress sensor** -- completion percentage of the current session
-- **Mow Mode sensor** -- full mow vs edge cut
-- **Mow State / Charge State / Error Code sensors** -- raw status values from the device
+- **Mow State sensor** -- decoded activity (mowing / edge / paused / returning / charging / fault / ...)
+- **Mow Mode sensor** -- full mow / edge / selection / zoning / remote / random
+- **Charge State / Dock Reason / Pause Reason / Error Code / Blade Lifespan sensors** -- decoded status (some diagnostic / disabled by default)
 - **Routine buttons** -- any Roborock routines/scenes you create for the mower appear as buttons
 - **Mow Height** control (sets cutting height via the `remote_pb` command)
-- **Efficiency Mode** selector (experimental)
+- **Efficiency Mode** selector (Daily / Efficient / Manicure)
+- **Mow Area** selector -- pick a saved zone (auto-discovered) to start a select-area mow
+- **Zone mowing service** (`roborock_mower.mow_areas`) -- start a select-area mow by boundary id
 
 ## Mowing
 
-Start a **full-lawn mow** from the lawn mower entity's *Start* action, and an **edge cut**
-from the **Edge Cut** button. Both are sent using the same `remote_pb` protobuf command the
-official app uses (reverse-engineered). Pause, resume, and return-to-dock also work from
-Home Assistant. **Area / zone mowing** (a specific saved zone) still needs to be started
-from the Roborock app, since it requires selecting saved map boundaries -- and any
-**routines** you create in the app appear here as buttons.
+Start a **full-lawn mow** from the lawn mower entity's *Start* action, an **edge cut**
+from the **Edge Cut** button, and **pause / resume / return-to-dock / stop** from the
+entity and the Stop button. Everything is sent through the same `remote_pb` protobuf RPC
+the official app uses (reverse-engineered) -- see [PROTOCOL.md](PROTOCOL.md).
+
+**Area / zone mowing:** call the **`roborock_mower.mow_areas`** service with the ids of the
+saved boundaries you want to mow (target your mower device). Discovering those ids from
+Home Assistant is experimental (the mower returns its map as base64 protobuf that the
+`python-roborock` cloud path may not decode); the `roborock_mower.list_areas` service
+tries, but the reliable source of ids is the Roborock app. Any **routines** you create in
+the app also appear here as buttons and are a convenient way to run saved zone mows.
 
 ## Requirements
 
@@ -57,6 +67,21 @@ from the Roborock app, since it requires selecting saved map boundaries -- and a
 4. Enter the verification code sent to your email
 5. The integration will discover your mower device(s) automatically
 
+## Map
+
+The **lawn / zone map** (the outline and cutting zones as an image) is **not**
+rendered, and it turns out it can't be easily: the map is stored as a *file*
+(`APP_MAP1.bin`) in Roborock's cloud **file store (FDS)** and fetched by the
+app's **native SDK** — `GET_FULL_MAP` over the API only returns an `ok`
+acknowledgement, the bytes come out-of-band. That download (URL, signing) lives
+in the app's native layer, isn't in the reverse-engineered material, and has no
+equivalent in `python-roborock`. Once those bytes are obtained the rest is easy
+— it's a plain protobuf **vector** map (boundary polygons + charger/robot
+points, no encryption/compression) — but obtaining them needs a separate effort
+(capturing the app's HTTPS traffic, or the APK's native code). Meanwhile the
+saved **zones** (A1/A2/A3 …) are available via the Mow Area selector. See
+[PROTOCOL.md](PROTOCOL.md) §7.
+
 ## Coexistence with official Roborock integration
 
 This integration can run alongside the official Roborock integration without conflict. The official integration skips mower devices (unsupported), and this integration only picks up mower devices.
@@ -67,12 +92,13 @@ You will need to enter your credentials separately for each integration.
 
 The Roborock mower has no official Home Assistant support and no public API, so this
 integration was built by reverse-engineering the device. It is a Roborock **V1** device
-that exposes status and control through Tuya **data points (DPS)** rather than the RPC
-commands used by vacuums. Status is read from the device's data points (with live MQTT
-push and a periodic cloud snapshot). Pause / resume / dock are sent as DPS writes, while
-start and edge cut use the app's `remote_pb` protobuf RPC (`RemoteMsg` with an
-`APP_BUTTON` action). Unknown state codes are logged as warnings so they can be reported
-and mapped in future updates.
+whose **status** is exposed through Tuya **data points (DPS)** rather than the RPC
+commands used by vacuums (read with live MQTT push + a periodic cloud snapshot).
+**Commands**, however, all use the app's **`remote_pb`** protobuf RPC — a `RemoteMsg`
+sent as JSON with string enum names: start / edge / select-area via `app_button`,
+cutting height via `remote_cmd`, efficiency mode via `mow_preference`. Unknown state
+codes are logged as warnings so they can be reported and mapped in future updates. The
+full reverse-engineered protocol is documented in [PROTOCOL.md](PROTOCOL.md).
 
 ## Development
 

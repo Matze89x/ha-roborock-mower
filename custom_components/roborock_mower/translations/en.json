@@ -54,8 +54,17 @@
       "charge_state": {
         "name": "Charge State"
       },
+      "charge_type": {
+        "name": "Dock Reason"
+      },
+      "pend_type": {
+        "name": "Pause Reason"
+      },
       "error_code": {
         "name": "Error Code"
+      },
+      "blade_lifespan": {
+        "name": "Blade Lifespan"
       },
       "mow_state": {
         "name": "Mow State"
@@ -72,11 +81,46 @@
     "select": {
       "mow_eff_mode": {
         "name": "Efficiency Mode"
+      },
+      "mow_area": {
+        "name": "Mow Area"
       }
     },
     "button": {
       "edge_cut": {
         "name": "Edge Cut"
+      },
+      "stop": {
+        "name": "Stop"
+      },
+      "cancel_dock": {
+        "name": "Cancel Dock"
+      }
+    }
+  },
+  "services": {
+    "mow_areas": {
+      "name": "Mow areas",
+      "description": "Start a select-area (zone) mow using saved-map boundaries.",
+      "fields": {
+        "area_ids": {
+          "name": "Area ids",
+          "description": "One or more saved boundary/zone ids to mow."
+        },
+        "area_names": {
+          "name": "Area names",
+          "description": "Optional names matching each area id (same order)."
+        }
+      }
+    },
+    "list_areas": {
+      "name": "List areas",
+      "description": "Return the mower's saved map boundaries/zones (best effort).",
+      "fields": {
+        "map_name": {
+          "name": "Map name",
+          "description": "Optional saved-map name to query (defaults to the active map)."
+        }
       }
     }
   }

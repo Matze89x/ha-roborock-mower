@@ -44,5 +44,5 @@ class RoborockMowHeightNumber(RoborockMowerEntity, NumberEntity):
         return self.status.mow_height
 
     async def async_set_native_value(self, value: float) -> None:
+        # State reflects back via the MQTT push, not a rate-limited REST poll.
         await self.coordinator.mower_api.set_mow_height(int(value))
-        await self.coordinator.async_request_refresh()

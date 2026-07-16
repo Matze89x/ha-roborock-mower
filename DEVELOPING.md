@@ -6,9 +6,18 @@ built, and what is confirmed vs. still unknown. The mower has **no official Home
 Assistant support and no public API**, so almost everything here was
 reverse-engineered from a live device (RockNeo Q105, `roborock.mower.a222`).
 
-> TL;DR: the mower is a Roborock **V1** device, but unlike vacuums it is controlled
-> through **Tuya data points (DPS)**, not RPC verbs. Status is read from DPS;
-> pause/resume/dock are DPS writes. Starting a mow needs a payload only the app has.
+> TL;DR: the mower is a Roborock **V1** device, but unlike vacuums its **status**
+> comes from **Tuya data points (DPS)**, not RPC verbs. **Commands** — start, edge,
+> select-area, pause, resume, stop, dock, cutting height, efficiency mode — all go
+> through the app's **`remote_pb`** protobuf RPC (a `RemoteMsg` sent as JSON with
+> string enum names). The full reverse-engineered protocol lives in
+> **[PROTOCOL.md](PROTOCOL.md)**; this document covers the integration architecture.
+
+> **Note (v0.4.0):** earlier versions of this integration sent pause/resume/dock as
+> DPS writes (201–205). That was a reverse-engineering dead-end kept working on the
+> a222, but the official app has **no DPS-write command path** — it drives every
+> control through `remote_pb` `app_button`. The integration now matches the app.
+> The DPS-write helper is retained only as a documented fallback.
 
 ---
 
@@ -109,17 +118,20 @@ Captured from `product.schema` and confirmed against live values.
 | 144 | afs_status | VALUE | After-sales mode | |
 | 145 | network_channel | VALUE | WAN connection type | |
 
-### 4.2 Command data points (write-only)
+### 4.2 Command data points (write-only) — LEGACY, not used
 
-Send by **writing the data point** (write value `1`).
+Historically the integration wrote these DPS (value `1`). **The official app never
+writes them** — all commands go through `remote_pb` (see §5). They are retained in
+`mower_api.py` only as a documented fallback mechanism; nothing writes them by
+default.
 
-| DPS | code | type | Confirmed live? |
+| DPS | code | type | Note |
 | --- | --- | --- | --- |
-| 201 | start | VALUE | ❌ **no-op for any scalar** — needs the app's task payload |
-| 202 | dock | RAW | ✅ returns to dock |
-| 203 | pause | RAW | ✅ pauses |
-| 204 | resume | RAW | ✅ resumes |
-| 205 | stop | RAW | ⚠️ same mechanism (not separately tested) |
+| 201 | start | VALUE | no-op for a scalar write (needs a task payload) |
+| 202 | dock | RAW | previously worked; now use `remote_pb` `CHARGE` |
+| 203 | pause | RAW | previously worked; now use `remote_pb` `MOW_PAUSE` |
+| 204 | resume | RAW | previously worked; now use `remote_pb` `MOW_RESUME` |
+| 205 | stop | RAW | now use `remote_pb` `MOW_END` |
 
 ### 4.3 `mow_state` (DPS 123) values
 
@@ -136,17 +148,28 @@ dock" presents as `mow_state == 0` **plus** `off_dock_no_task_status != 0`.
 
 ### 4.4 Sending a command (the exact mechanism)
 
+Commands go through the `remote_pb` RPC (see §5), **not** DPS writes. The
+integration's `_send_remote_msg` sends a `RemoteMsg` as a plain dict (string enum
+names, `id` as a string), which `python-roborock` places under `dps.101`:
+
+```python
+await channel.rpc_channel.send_command(
+    "remote_pb",
+    params={"id": str(int(time.time() * 1000)), "type": "APP_BUTTON",
+            "app_button": "MOW_PAUSE"},
+)  # -> "ok" (mapped to {}) on success
+```
+
+The legacy DPS-write mechanism (kept only as a fallback in `_write_dps`) looked
+like this — the app does not use it:
+
 ```python
 import json, time
 from roborock.roborock_message import RoborockMessage, RoborockMessageProtocol
 
 payload = json.dumps({"dps": {"203": 1}, "t": int(time.time())}).encode()
-msg = RoborockMessage(
-    protocol=RoborockMessageProtocol.RPC_REQUEST,  # outer framing
-    payload=payload,
-    version=b"1.0",
-)
-await mqtt_channel.publish(msg)  # MqttChannel from create_mqtt_channel(...)
+msg = RoborockMessage(protocol=RoborockMessageProtocol.RPC_REQUEST, payload=payload, version=b"1.0")
+await mqtt_channel.publish(msg)
 ```
 
 ### 4.5 Reading DPS — important caveat
@@ -297,18 +320,45 @@ every bump.
 
 ## 9. Status: confirmed vs. open
 
-**Confirmed & working**
+**Confirmed live (RockNeo Q105, fw 02.68.36):**
 - Auth, device discovery, MQTT transport.
-- Live status: battery, mow_state, mow_progress, mow_type (mow mode), charge_state, error_code.
-- Commands: pause (203), resume (204), dock (202). DPS-write mechanism verified live.
-- Routine listing/execution API.
+- Status decode via the real `RobotDetailState` table — verified both mid-mow
+  (`55`→mowing, `52`→undocking) and docked (`0`→idle, `charge_state 1`→charging).
+  Explicit mowing / paused / returning / docked / error (no more heuristic).
+- **Start (`MOW_GLOBAL`)** → `['ok']`, mower undocked. **Pause (`MOW_PAUSE`)** →
+  `['ok']`, accepted. Edge cut (`MOW_EDGE`) via `remote_pb`.
+- Query responses are **JSON** (recovered by `MowerApi._query` from
+  python-roborock's "Unexpected API Result"). Efficiency-mode **read** works;
+  **zone discovery** works via the preference config's `custom[]` (A1/A2/A3 →
+  `area_id` 2/3/4), surfaced by `get_areas()` + the Mow Area select.
+
+**Also confirmed live (via `tools/test_features.py`):**
+- Efficiency-mode **write** (`SET_MOW_PREFERENCE`): `DAILY`→`EFFICIENT` verified
+  changed and restored.
+- Cutting-height **write** (`REMOTE_CMD` + preference persist): `pref.height`→45
+  verified persisted. (Note: the mower may not report `height` back until it is
+  first set, so the number entity can read empty initially.)
+
+**Still pending a live action to confirm:**
+- resume/dock/stop/edge/`cancel_dock` `app_button` writes (transport proven by
+  start + pause, both confirmed `['ok']` live). Test via `test_features.py --drive`.
+- Which id `MOW_SELECT` wants (`area_id` from the preference config vs a boundary
+  id) — the `--drive` area-mow step answers this.
+
+**`get_home_data` is rate-limited — 5/hour, 40/day (shared with the official
+Roborock integration on the same account).** This was hit during testing. The
+integration is now push-first: the coordinator polls only every 30 min and
+treats a `RoborockRateLimit` as "keep the last (push-fed) state", and commands
+no longer trigger a REST refresh — state changes arrive over the MQTT DPS push.
+Do not lower `UPDATE_INTERVAL`.
 
 **Open / future work**
-- `start` / edge cut / zone mowing — need the app's task payload (see §5).
-- `mow_height` (134) value scaling and `mow_eff_mode` (133) label mapping — unverified.
-- "Returning to dock" `mow_state` code (currently inferred from `off_dock_no_task_status`).
-- Map + zone import — requires parsing the protobuf map stream.
-- Load/QA in a real Home Assistant instance.
+- Full map grid (`GET_FULL_MAP`) still returns no decodable `map` on the cloud
+  path; zone ids come from the preference config instead (sufficient for
+  `MOW_SELECT`). See [PROTOCOL.md](PROTOCOL.md) §7.
+- Cutting-height bounds are a 20–70 fallback (real `HeightMotorParameter` needs
+  a `GET_HEIGHT_MOTOR_PARAMETER` query); DP 134 not reported on this device.
+- Larger `remote_pb` surface (schedules, go-to, map edit, clear-task) unused.
 
 ---
 

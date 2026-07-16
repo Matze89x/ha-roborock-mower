@@ -7,10 +7,13 @@ build/
 .eggs/
 *.egg
 .venv/
+.venv-ha/
 venv/
 .env
 *.log
 .DS_Store
+.pytest_cache/
+.ruff_cache/
 
 # Local reverse-engineering session (contains auth tokens) -- never commit
 .mower_session.json

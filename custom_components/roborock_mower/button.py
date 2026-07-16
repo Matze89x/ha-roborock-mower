@@ -1,8 +1,9 @@
-"""Button platform exposing Roborock routines (scenes) for the mower.
+"""Button platform for the Roborock mower.
 
-Roborock "routines" are created in the Roborock app (e.g. a full mow or an edge
-cut) and triggered by id through the cloud. This is the supported way to start a
-mow, since the raw start data point requires the app's task payload.
+Exposes an Edge Cut button, a Stop button, and one button per Roborock
+"routine" (scene) created in the app. Routines are triggered by id through the
+cloud and are a convenient way to run app-authored tasks (e.g. a saved
+zone mow) from Home Assistant.
 """
 
 from __future__ import annotations
@@ -29,11 +30,13 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up a button for each app-defined routine on each mower."""
+    """Set up the mower control buttons and one button per app routine."""
     coordinators: list[RoborockMowerCoordinator] = hass.data[DOMAIN][entry.entry_id]
     entities: list[ButtonEntity] = []
     for coordinator in coordinators:
         entities.append(RoborockEdgeCutButton(coordinator))
+        entities.append(RoborockStopButton(coordinator))
+        entities.append(RoborockCancelDockButton(coordinator))
         try:
             routines = await coordinator.mower_api.get_routines()
         except RoborockException as err:
@@ -59,7 +62,37 @@ class RoborockEdgeCutButton(RoborockMowerEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.coordinator.mower_api.edge_cut()
-        await self.coordinator.async_request_refresh()
+
+
+class RoborockStopButton(RoborockMowerEntity, ButtonEntity):
+    """Stops / ends the current mow task (AppButton MOW_END).
+
+    Distinct from pause: this ends the task rather than suspending it.
+    """
+
+    _attr_translation_key = "stop"
+    _attr_icon = "mdi:stop"
+
+    def __init__(self, coordinator: RoborockMowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._device.duid}_stop"
+
+    async def async_press(self) -> None:
+        await self.coordinator.mower_api.stop()
+
+
+class RoborockCancelDockButton(RoborockMowerEntity, ButtonEntity):
+    """Cancels an in-progress return-to-dock (AppButton DOCK_END)."""
+
+    _attr_translation_key = "cancel_dock"
+    _attr_icon = "mdi:home-export-outline"
+
+    def __init__(self, coordinator: RoborockMowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._device.duid}_cancel_dock"
+
+    async def async_press(self) -> None:
+        await self.coordinator.mower_api.cancel_dock()
 
 
 class RoborockRoutineButton(RoborockMowerEntity, ButtonEntity):
