@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import voluptuous as vol
@@ -163,8 +164,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
     )
     web_api = UserWebApiClient(client, user_data)
 
+    # Force the v3 home-data endpoint: it returns every device category
+    # (including mowers). Some python-roborock versions' get_home_data() maps to
+    # an older endpoint that returns an empty device list for this account.
+    get_home_data_v3 = getattr(client, "get_home_data_v3", None)
     try:
-        home_data = await web_api.get_home_data()
+        if get_home_data_v3 is not None:
+            home_data = await get_home_data_v3(user_data)
+        else:
+            home_data = await web_api.get_home_data()
     except RoborockException as err:
         raise ConfigEntryNotReady(f"Failed to fetch home data: {err}") from err
 
@@ -175,6 +183,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
     ]
 
     if not mower_devices:
+        try:
+            rr_version = version("python-roborock")
+        except PackageNotFoundError:
+            rr_version = "unknown"
         seen = [
             (
                 device.name,
@@ -184,7 +196,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
             for _duid, (device, product) in home_data.device_products.items()
         ]
         _LOGGER.warning(
-            "No mower devices found on account %s. Devices seen: %s", username, seen
+            "No mower devices found on account %s (python-roborock %s). "
+            "device_products=%s devices=%d received=%d products=%d",
+            username,
+            rr_version,
+            seen,
+            len(getattr(home_data, "devices", None) or []),
+            len(getattr(home_data, "received_devices", None) or []),
+            len(getattr(home_data, "products", None) or []),
         )
         raise ConfigEntryNotReady("No mower devices found on this account")
 
