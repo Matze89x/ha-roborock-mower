@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 import voluptuous as vol
-from roborock.data import RoborockCategory, UserData
+from roborock.data import UserData
 from roborock.devices.cache import DeviceCache, NoCache
 from roborock.devices.rpc.v1_channel import create_v1_channel
 from roborock.exceptions import RoborockException
@@ -42,7 +42,7 @@ from .const import (
     SERVICE_MOW_AREAS,
 )
 from .coordinator import RoborockMowerCoordinator
-from .mower_api import MowerApi, parse_dps_push, redact_dps
+from .mower_api import MowerApi, is_mower, parse_dps_push, redact_dps
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -171,11 +171,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
     mower_devices = [
         (device, product)
         for _duid, (device, product) in home_data.device_products.items()
-        if product.category == RoborockCategory.MOWER
+        if is_mower(product)
     ]
 
     if not mower_devices:
-        _LOGGER.warning("No mower devices found on account %s", username)
+        seen = [
+            (
+                device.name,
+                getattr(product, "model", None),
+                str(getattr(product, "category", None)),
+            )
+            for _duid, (device, product) in home_data.device_products.items()
+        ]
+        _LOGGER.warning(
+            "No mower devices found on account %s. Devices seen: %s", username, seen
+        )
         raise ConfigEntryNotReady("No mower devices found on this account")
 
     cache = NoCache()

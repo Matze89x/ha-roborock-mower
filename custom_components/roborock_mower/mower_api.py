@@ -23,6 +23,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from roborock.data import RoborockCategory
 from roborock.data.containers import HomeDataProduct, HomeDataScene
 from roborock.devices.rpc.v1_channel import V1Channel
 from roborock.exceptions import RoborockException
@@ -69,6 +70,24 @@ DPS_STOP = 205
 
 # rpc_request / rpc_response data points, ignored when reading status pushes.
 _RPC_DPS = {101, 102}
+
+# The mower's device model prefix (e.g. roborock.mower.a222). Used to identify
+# mowers robustly — see is_mower().
+MOWER_MODEL_PREFIX = "roborock.mower"
+
+
+def is_mower(product: Any) -> bool:
+    """Whether a home_data product is a mower.
+
+    Prefer the ``MOWER`` category, but also match the model prefix: some
+    ``python-roborock`` versions classify the mower under a different/UNKNOWN
+    category, so relying on the category alone can miss it. The model
+    (e.g. ``roborock.mower.a222``) is stable across versions.
+    """
+    if getattr(product, "category", None) == RoborockCategory.MOWER:
+        return True
+    model = getattr(product, "model", "") or ""
+    return model.startswith(MOWER_MODEL_PREFIX)
 
 # --- RemoteMsg.Type (top-level command discriminator). Sent as the name. ------
 TYPE_APP_BUTTON = "APP_BUTTON"

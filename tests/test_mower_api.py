@@ -277,6 +277,29 @@ def test_set_mow_eff_mode_builds_string_enum_payload() -> None:
     assert sent["mow_preference"]["mode"] == "GLOBAL"
 
 
+class _FakeProduct:
+    def __init__(self, category: object = None, model: str = "") -> None:
+        self.category = category
+        self.model = model
+
+
+def test_is_mower_matches_category_or_model() -> None:
+    from roborock.data import RoborockCategory
+
+    # Correct category -> mower.
+    assert mower_api.is_mower(_FakeProduct(category=RoborockCategory.MOWER))
+    # Right model prefix even if the category is wrong/UNKNOWN (version-robust).
+    assert mower_api.is_mower(
+        _FakeProduct(category=RoborockCategory.UNKNOWN, model="roborock.mower.a222")
+    )
+    assert mower_api.is_mower(_FakeProduct(model="roborock.mower.a111"))
+    # A vacuum is not a mower.
+    assert not mower_api.is_mower(
+        _FakeProduct(category=RoborockCategory.VACUUM, model="roborock.vacuum.a104")
+    )
+    assert not mower_api.is_mower(_FakeProduct(model=""))
+
+
 def test_redact_dps_masks_gps() -> None:
     dps = {mower_api.DPS_BATTERY: 80, mower_api.DPS_GPS_COORDINATE: "base64gps=="}
     red = mower_api.redact_dps(dps)
