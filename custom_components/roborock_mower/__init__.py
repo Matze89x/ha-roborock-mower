@@ -211,7 +211,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
             )
         )
 
-        await coordinator.async_config_entry_first_refresh()
+        # Seed initial state from the device_status we already fetched above
+        # instead of polling again -- get_home_data is rate-limited (5/hour,
+        # 40/day per account), so setup must cost only ONE home_data call. Live
+        # updates then arrive via MQTT push, with the hourly coordinator poll as
+        # a rate-limit-tolerant safety net.
+        coordinator.async_set_updated_data(mower_api.status)
         coordinators.append(coordinator)
 
     hass.data.setdefault(DOMAIN, {})

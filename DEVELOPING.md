@@ -345,12 +345,21 @@ every bump.
 - Which id `MOW_SELECT` wants (`area_id` from the preference config vs a boundary
   id) — the `--drive` area-mow step answers this.
 
-**`get_home_data` is rate-limited — 5/hour, 40/day (shared with the official
-Roborock integration on the same account).** This was hit during testing. The
-integration is now push-first: the coordinator polls only every 30 min and
-treats a `RoborockRateLimit` as "keep the last (push-fed) state", and commands
-no longer trigger a REST refresh — state changes arrive over the MQTT DPS push.
-Do not lower `UPDATE_INTERVAL`.
+**`get_home_data` is rate-limited — 5/hour, 40/day PER ACCOUNT** (shared if the
+official Roborock integration also runs). This bit hard in practice: on a
+`python-roborock` version that classified the mower under a different category,
+setup raised `ConfigEntryNotReady`, HA retried it, and **each retry spent one
+`home_data` call — 5 retries hit the 5/hour cap in ~2.5 min** (the classic
+"No mower found ×5 → Reached maximum requests" sequence). Mitigations, all
+shipped:
+- Match the mower by **model prefix** (`is_mower()`), not category alone, so
+  setup succeeds across versions and never enters the retry loop.
+- Setup costs **one** `home_data` call — seed the coordinator from the discovery
+  `device_status` (`async_set_updated_data`) instead of a second poll in
+  `async_config_entry_first_refresh`.
+- The coordinator polls only **hourly** (24/day) and treats `RoborockRateLimit`
+  as "keep the last push-fed state"; commands never trigger a REST refresh
+  (state arrives over the MQTT DPS push). Do not lower `UPDATE_INTERVAL`.
 
 **Open / future work**
 - Full map grid (`GET_FULL_MAP`) still returns no decodable `map` on the cloud

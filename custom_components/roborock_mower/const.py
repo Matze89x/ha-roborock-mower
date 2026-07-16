@@ -21,10 +21,11 @@ CONF_BASE_URL = "base_url"
 CONF_ENTRY_CODE = "code"
 
 # Live updates arrive via MQTT DPS push; this poll is only a cloud-snapshot
-# safety net. get_home_data is heavily rate-limited (5/hour, 40/day) and that
-# budget is shared with the official Roborock integration on the same account,
-# so poll infrequently and lean on the MQTT push for real-time state.
-UPDATE_INTERVAL = timedelta(minutes=30)
+# safety net. get_home_data is heavily rate-limited (5/hour, 40/day PER ACCOUNT
+# -- and shared if the official Roborock integration also runs), so poll only
+# hourly (24/day, leaving headroom for restarts) and lean on the MQTT push for
+# real-time state. Do not lower this.
+UPDATE_INTERVAL = timedelta(minutes=60)
 
 REGION_OPTIONS = ["auto", "us", "eu", "ru", "cn"]
 
