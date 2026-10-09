@@ -3,6 +3,41 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.1.2 – Roborock logo, cleaner start, discovery tools
+
+**Kurzfassung (Deutsch):** Das Gerät zeigt jetzt das Roborock-Logo (wie die
+offizielle Integration). Beim Losfahren steht nicht mehr kurz „Leerlauf“, sondern
+gleich „Mäht“. Der Mähstatus „idle“ heißt jetzt „Keine Aufgabe“ statt „Bereit“,
+weil der Mäher ihn auch während der Rückfahrt meldet. Neu: Die Diagnose fragt den
+Mäher beim Herunterladen live ab (z. B. `GET_ROBOT_STATUS`), und die Aktion
+`roborock_mower.query` stellt eigene Lese-Abfragen. Damit suchen wir Wartungswerte
+wie die Messer-Lebensdauer, die der Mäher nicht von sich aus sendet.
+
+### Fixes
+
+- **Brief "Idle" when the mower set off:** leaving the dock reports "not
+  charging" a few seconds before the task code (live: 10:13:43 → 10:13:49). After
+  a start from Home Assistant, or for 60 s after leaving the dock, the mower now
+  reads **mowing** until the task code arrives.
+- Data point 143 = **104** was seen live while driving back; it now counts as
+  returning (also for returns started from the app).
+- The mow state `idle` is shown as **"No task" / "Keine Aufgabe"** (the mower
+  also reports it while driving back); `free` as "Free" / "Frei".
+
+### New
+
+- **Roborock logo and icon** for the device and integration pages, shipped in
+  the integration (`brand/`, Home Assistant 2026 loads it locally).
+- **Diagnostics probe the mower live** when downloaded (`GET_ROBOT_STATUS`,
+  `GET_MOW_PREFERENCE_CONFIG`, `GET_HEIGHT_MOTOR_PARAMETER`, `GET_MAP_NAMES`),
+  position-like fields redacted, plus a count of every message type received.
+- **Action `roborock_mower.query`**: sends a read-only `GET_*` query and returns
+  the raw answer, to find data the integration does not decode yet (e.g. blade
+  and module wear shown in the app's maintenance page). Anything not starting
+  with `GET_` is refused, so it can never move the mower.
+- The first message of each kind the mower sends is logged at debug level
+  (type and size), so a debug log shows what arrives without hundreds of MB.
+
 ## 0.1.1 – fixes from the first live test (RockNeo Q105)
 
 **Kurzfassung (Deutsch):** Statuswerte erscheinen jetzt übersetzt (Deutsch/Englisch)

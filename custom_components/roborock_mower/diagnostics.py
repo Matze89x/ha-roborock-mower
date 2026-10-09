@@ -9,6 +9,7 @@ follow a test run without a debug log.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
@@ -26,6 +27,44 @@ from .vendor import ROBOROCK_VERSION
 
 TO_REDACT = {"gps_coordinate", "local_key", "sn", "duid", "lat", "lon"}
 
+# Read-only queries asked live when diagnostics are downloaded, to discover data
+# the integration does not decode yet (e.g. consumables, statistics).
+PROBE_QUERIES = (
+    "GET_ROBOT_STATUS",
+    "GET_MOW_PREFERENCE_CONFIG",
+    "GET_HEIGHT_MOTOR_PARAMETER",
+    "GET_MAP_NAMES",
+)
+PROBE_TIMEOUT = 8
+_PROBE_REDACT_HINTS = ("gps", "lat", "lon", "position", "coordinate")
+
+
+def _redact_probe(value: Any) -> Any:
+    """Drop anything that looks like a geographic position from a probe answer."""
+    if isinstance(value, dict):
+        return {
+            key: "**REDACTED**"
+            if any(hint in str(key).lower() for hint in _PROBE_REDACT_HINTS)
+            else _redact_probe(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_probe(item) for item in value]
+    if isinstance(value, str) and len(value) > 2000:
+        return f"<{len(value)} characters>"
+    return value
+
+
+async def _probe(api: Any, query_type: str) -> Any:
+    try:
+        return _redact_probe(
+            await asyncio.wait_for(api.query(query_type), PROBE_TIMEOUT)
+        )
+    except TimeoutError:
+        return {"error": "no answer (mower asleep or out of range?)"}
+    except Exception as err:  # noqa: BLE001 - diagnostics must never fail
+        return {"error": f"{type(err).__name__}: {err}"[:300]}
+
 
 def _package_version(name: str) -> str | None:
     try:
@@ -34,7 +73,9 @@ def _package_version(name: str) -> str | None:
         return None
 
 
-def _mower_diagnostics(coordinator: RoborockMowerCoordinator) -> dict[str, Any]:
+def _mower_diagnostics(
+    coordinator: RoborockMowerCoordinator, probes: dict[str, Any]
+) -> dict[str, Any]:
     api = coordinator.mower_api
     device = coordinator.device
     product = coordinator.product
@@ -63,8 +104,11 @@ def _mower_diagnostics(coordinator: RoborockMowerCoordinator) -> dict[str, Any]:
                 else None
             ),
         },
-        "activity": derive_activity(status, api.return_pending),
+        "activity": derive_activity(status, api.return_pending, api.task_pending),
         "return_pending": api.return_pending,
+        "task_pending": api.task_pending,
+        "message_counts": dict(api.message_counts),
+        "probes": probes,
         "areas": api.areas,
         "status": async_redact_data(status_dict, TO_REDACT),
         "mow_state_label": status.mow_state_label,
@@ -91,6 +135,13 @@ async def async_get_config_entry_diagnostics(
     runtime = entry.runtime_data
     integration = await async_get_integration(hass, DOMAIN)
     snapshot_age = runtime.home_data.snapshot_age
+    mowers = []
+    for coordinator in runtime.coordinators:
+        answers = await asyncio.gather(
+            *(_probe(coordinator.mower_api, query) for query in PROBE_QUERIES)
+        )
+        probes = dict(zip(PROBE_QUERIES, answers, strict=True))
+        mowers.append(_mower_diagnostics(coordinator, probes))
     return {
         "versions": {
             "integration": str(integration.version),
@@ -113,5 +164,5 @@ async def async_get_config_entry_diagnostics(
             "last_error": runtime.home_data.last_error,
         },
         "mqtt_session_connected": getattr(runtime.mqtt_session, "connected", None),
-        "mowers": [_mower_diagnostics(c) for c in runtime.coordinators],
+        "mowers": mowers,
     }

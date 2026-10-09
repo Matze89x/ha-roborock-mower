@@ -122,6 +122,10 @@ BUTTON_MOW_RESUME = "MOW_RESUME"  # resume a paused mow
 BUTTON_MOW_END = "MOW_END"  # stop / end the mow task
 BUTTON_CHARGE = "CHARGE"  # return to dock & charge
 BUTTON_DOCK_END = "DOCK_END"  # cancel an in-progress return-to-dock
+# Buttons that start a task; the mower needs a few seconds to report it.
+_STARTING_BUTTONS = frozenset(
+    {BUTTON_MOW_GLOBAL, BUTTON_MOW_EDGE, BUTTON_MOW_SELECT, BUTTON_MOW_RESUME}
+)
 
 # --- MowPreference.Effective enum (the "efficiency mode"). ------------------
 # DPS 133 reports the same 1/2/3 value (rock.iot MowEffModeDpValue). The UI
@@ -264,12 +268,22 @@ MOW_STATES_DOCKED = frozenset(
     {61, 62, 63, 68, 76, 77, 104, 105, 106, 151, 152, 153}
 )
 
+# Once DP 123 reports one of these, a pending task start is settled.
+TASK_STATES_SETTLED = (
+    MOW_STATES_MOWING
+    | MOW_STATES_MAPPING
+    | MOW_STATES_PAUSED
+    | MOW_STATES_ERROR
+    | MOW_STATES_RETURNING
+)
+
 # charge_state (DP 127) values reported only while the mower is on the dock.
 CHARGE_STATES_ON_DOCK = frozenset({1, 2, 3, 5})
 # dock_state (DP 128) DockStateDpValue: 1 MOVING_TO_TARGET, 2 DOCKING.
 DOCK_STATES_RETURNING = frozenset({1, 2})
-# off_dock_no_task_status (DP 143): 3 = DOCKING (returning to dock).
-OFF_DOCK_DOCKING = 3
+# off_dock_no_task_status (DP 143) values seen while heading back to the dock:
+# 3 = DOCKING (app schema); 104 observed live on a Q105 after "return to dock".
+OFF_DOCK_RETURNING = frozenset({3, 104})
 
 ACTIVITY_MOWING = "mowing"
 ACTIVITY_PAUSED = "paused"
@@ -281,12 +295,19 @@ ACTIVITY_ERROR = "error"
 # How long a return-to-dock sent from Home Assistant counts as "returning"
 # while the mower has not reached the dock yet.
 RETURN_PENDING_TIMEOUT = 30 * 60
+# After a mow is started from Home Assistant, or right after the mower leaves
+# the dock, it takes a few seconds until DP 123 names the task; meanwhile it
+# reads "mowing" instead of flashing "idle".
+TASK_PENDING_TIMEOUT = 120
+LEFT_DOCK_GRACE = 60
 
 # Entries kept in the in-memory event history (shown in the diagnostics).
 HISTORY_SIZE = 300
 
 
-def derive_activity(status: MowerStatus, return_pending: bool = False) -> str | None:
+def derive_activity(
+    status: MowerStatus, return_pending: bool = False, task_pending: bool = False
+) -> str | None:
     """Coarse activity (ACTIVITY_*) from the mower's data points.
 
     ``mow_state`` (DP 123) says what task runs; ``charge_state`` (DP 127) says
@@ -302,7 +323,7 @@ def derive_activity(status: MowerStatus, return_pending: bool = False) -> str | 
     if (
         ms in MOW_STATES_RETURNING
         or status.dock_state in DOCK_STATES_RETURNING
-        or status.off_dock_no_task_status == OFF_DOCK_DOCKING
+        or status.off_dock_no_task_status in OFF_DOCK_RETURNING
     ):
         return ACTIVITY_RETURNING
     if ms in MOW_STATES_MOWING or ms in MOW_STATES_MAPPING:
@@ -315,8 +336,13 @@ def derive_activity(status: MowerStatus, return_pending: bool = False) -> str | 
         return ACTIVITY_DOCKED
     if charge_state in CHARGE_STATES_ON_DOCK:
         return ACTIVITY_DOCKED
-    # Off the dock and no mowing task: on its way back, or simply stopped.
-    if return_pending or ms in MOW_STATES_DOCKED or status.charge_type:
+    # Off the dock and no mowing task (yet): on its way back, about to mow, or
+    # simply stopped.
+    if return_pending:
+        return ACTIVITY_RETURNING
+    if task_pending:
+        return ACTIVITY_MOWING
+    if ms in MOW_STATES_DOCKED or status.charge_type:
         return ACTIVITY_RETURNING
     return ACTIVITY_IDLE
 
@@ -501,7 +527,11 @@ class MowerApi:
         self.areas: list[dict[str, Any]] | None = None
         # Commands, answers and data-point changes, newest last (diagnostics).
         self.history: deque[dict[str, Any]] = deque(maxlen=HISTORY_SIZE)
+        # Received messages per protocol (diagnostics: what the mower sends).
+        self.message_counts: dict[str, int] = {}
         self._return_requested_at: float | None = None
+        self._task_requested_at: float | None = None
+        self._left_dock_at: float | None = None
 
     @property
     def duid(self) -> str:
@@ -535,6 +565,26 @@ class MowerApi:
             self._return_requested_at = None
         return self._return_requested_at is not None
 
+    @property
+    def task_pending(self) -> bool:
+        """A mow was just started (from HA) or the mower just left the dock."""
+        now = time.monotonic()
+        if (
+            self._task_requested_at is not None
+            and now - self._task_requested_at > TASK_PENDING_TIMEOUT
+        ):
+            self._task_requested_at = None
+        if self._left_dock_at is not None and now - self._left_dock_at > LEFT_DOCK_GRACE:
+            self._left_dock_at = None
+        return self._task_requested_at is not None or self._left_dock_at is not None
+
+    def note_message(self, protocol: Any) -> bool:
+        """Count a received message; True the first time a protocol is seen."""
+        name = getattr(protocol, "name", None) or str(protocol)
+        first = name not in self.message_counts
+        self.message_counts[name] = self.message_counts.get(name, 0) + 1
+        return first
+
     def _record(self, kind: str, **data: Any) -> None:
         self.history.append({"time": _now(), "kind": kind, **data})
 
@@ -544,12 +594,19 @@ class MowerApi:
             for code, value in dps.items()
             if self._dps.get(code) != value and code != DPS_GPS_COORDINATE
         }
+        was_on_dock = MowerStatus.from_dps(self._dps).on_dock
         self._dps.update(dps)
         if changed:
             self._record(source, dps=changed)
         status = self.status
         if status.on_dock:
             self._return_requested_at = None
+            self._left_dock_at = None
+        elif was_on_dock and source == "push" and self._return_requested_at is None:
+            self._left_dock_at = time.monotonic()
+        if status.mow_state in TASK_STATES_SETTLED:
+            self._task_requested_at = None
+            self._left_dock_at = None
         return status
 
     def apply_push(self, dps: dict[int, Any]) -> MowerStatus:
@@ -640,7 +697,11 @@ class MowerApi:
     async def _send_task_button(self, app_button: str, **extra: Any) -> Any:
         """Send a button that starts/changes a task (ends a pending return)."""
         self._return_requested_at = None
-        return await self._send_button(app_button, **extra)
+        self._task_requested_at = None
+        result = await self._send_button(app_button, **extra)
+        if app_button in _STARTING_BUTTONS:
+            self._task_requested_at = time.monotonic()
+        return result
 
     async def start(self) -> Any:
         """Start a full-lawn mow (AppButton MOW_GLOBAL)."""
@@ -691,6 +752,8 @@ class MowerApi:
 
     async def dock(self) -> Any:
         """Return to the dock and charge (AppButton CHARGE)."""
+        self._task_requested_at = None
+        self._left_dock_at = None
         result = await self._send_button(BUTTON_CHARGE)
         if not self.status.on_dock:
             self._return_requested_at = time.monotonic()
@@ -747,6 +810,20 @@ class MowerApi:
         return await self._send_remote_msg(
             {"type": TYPE_SET_MOW_PREFERENCE, "mow_preference": pref}
         )
+
+    async def query(self, query_type: str, **extra: Any) -> Any:
+        """Send a read-only remote_pb query (``GET_*``) and return its answer.
+
+        Discovery aid (diagnostics, the ``query`` action): lets a user ask the
+        mower for data the integration does not decode yet. Only ``GET_*``
+        types are allowed, so it can never move the mower or change settings.
+        """
+        query_type = query_type.strip().upper()
+        if not query_type.startswith("GET_"):
+            raise ValueError("Only read-only GET_* queries are allowed")
+        # The payload may add fields, never replace the request type or id.
+        fields = {k: v for k, v in extra.items() if k not in ("type", "id")}
+        return await self._query({"type": query_type, **fields})
 
     async def get_mow_preference_config(self) -> dict[str, Any] | None:
         """Read the mowing preference config (global + custom areas), or None."""

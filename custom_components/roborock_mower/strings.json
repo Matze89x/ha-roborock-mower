@@ -101,8 +101,8 @@
       "mow_state": {
         "name": "Mow State",
         "state": {
-          "idle": "Idle",
-          "free": "Ready",
+          "idle": "No task",
+          "free": "Free",
           "free_initializing": "Initializing",
           "free_locating": "Locating",
           "map_initializing": "Mapping: initializing",
@@ -228,6 +228,24 @@
         "map_name": {
           "name": "Map name",
           "description": "Optional saved-map name to query (defaults to the active map)."
+        }
+      }
+    },
+    "query": {
+      "name": "Query the mower",
+      "description": "Ask the mower a read-only question (GET_* query) and return its raw answer. Discovery aid for data the integration does not show yet, e.g. maintenance values. Never moves the mower or changes settings.",
+      "fields": {
+        "device_id": {
+          "name": "Mower",
+          "description": "The Roborock mower(s) to ask."
+        },
+        "query_type": {
+          "name": "Query type",
+          "description": "Name of the read-only query, e.g. GET_ROBOT_STATUS. Must start with GET_."
+        },
+        "payload": {
+          "name": "Extra fields",
+          "description": "Optional additional fields for the query."
         }
       }
     }

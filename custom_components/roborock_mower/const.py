@@ -51,6 +51,9 @@ REGION_OPTIONS = ["auto", "us", "eu", "ru", "cn"]
 # Services (zone / area mowing).
 SERVICE_MOW_AREAS = "mow_areas"
 SERVICE_LIST_AREAS = "list_areas"
+SERVICE_QUERY = "query"
+ATTR_QUERY_TYPE = "query_type"
+ATTR_PAYLOAD = "payload"
 ATTR_DEVICE_ID = "device_id"
 ATTR_AREA_IDS = "area_ids"
 ATTR_AREA_NAMES = "area_names"

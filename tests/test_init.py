@@ -15,7 +15,7 @@ from homeassistant.components.lawn_mower import LawnMowerActivity
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 from homeassistant.util.package import is_installed
@@ -511,7 +511,9 @@ async def test_stopped_in_garden_is_idle(
     hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
 ) -> None:
     await _setup(hass, config_entry)
-    channel.callback(FakeMessage(b'{"dps":{"123":0,"127":0}}'))
+    # Mowing, then stopped (task ended) somewhere in the garden.
+    channel.callback(FakeMessage(b'{"dps":{"123":55,"127":0}}'))
+    channel.callback(FakeMessage(b'{"dps":{"123":0}}'))
     await hass.async_block_till_done()
     assert hass.states.get(_entity_id(hass, "lawn_mower", "lawn_mower")).state == (
         LawnMowerActivity.IDLE
@@ -586,11 +588,122 @@ async def test_diagnostics_include_history(
     await hass.async_block_till_done()
     diag = await async_get_config_entry_diagnostics(hass, config_entry)
     history = diag["mowers"][0]["history"]
-    # Last two entries: our pause command, then the mower's answer push.
-    assert [e["kind"] for e in history[-2:]] == ["command", "push"]
-    assert history[-2]["command"] == "APP_BUTTON MOW_PAUSE"
-    assert history[-2]["result"] == "['ok']"
-    assert history[-1]["dps"] == {"123": 58}
+    pause = next(
+        i for i, e in enumerate(history) if e.get("command") == "APP_BUTTON MOW_PAUSE"
+    )
+    assert history[pause]["result"] == "['ok']"
+    # The mower's answer push follows the command.
+    assert history[pause + 1] == {**history[pause + 1], "kind": "push", "dps": {"123": 58}}
     assert any(e.get("command") == "GET_MOW_PREFERENCE_CONFIG" for e in history)
     assert "gps-secret" not in json.dumps(diag)
     assert diag["mowers"][0]["activity"] == "paused"
+
+
+
+async def test_field_log_return_sequence(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """Replays the pushes logged live on a Q105 (2026-10-09 10:14-10:15)."""
+    await _setup(hass, config_entry)
+    mower = _entity_id(hass, "lawn_mower", "lawn_mower")
+
+    def state() -> str:
+        return hass.states.get(mower).state
+
+    async def push(payload: bytes) -> None:
+        channel.callback(FakeMessage(payload))
+        await hass.async_block_till_done()
+
+    await push(b'{"dps":{"122":1,"123":55,"127":0}}')
+    assert state() == LawnMowerActivity.MOWING
+    await hass.services.async_call("lawn_mower", "dock", {"entity_id": mower}, blocking=True)
+    await push(b'{"dps":{"129":1}}')
+    await push(b'{"dps":{"122":0,"123":0,"132":0}}')
+    assert state() == LawnMowerActivity.RETURNING
+    await push(b'{"dps":{"143":104}}')
+    assert state() == LawnMowerActivity.RETURNING
+    await push(b'{"dps":{"127":3,"143":0}}')
+    assert state() == LawnMowerActivity.DOCKED
+    await push(b'{"dps":{"129":0}}')
+    await push(b'{"dps":{"127":2}}')
+    assert state() == LawnMowerActivity.DOCKED
+
+
+async def test_field_start_sequence_never_reads_idle(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """Live: leaving the dock reported "not charging" 5 s before the task."""
+    await _setup(hass, config_entry)
+    mower = _entity_id(hass, "lawn_mower", "lawn_mower")
+    for payload in (
+        b'{"dps":{"127":0}}',
+        b'{"dps":{"122":1}}',
+        b'{"dps":{"123":57}}',
+        b'{"dps":{"123":55}}',
+    ):
+        channel.callback(FakeMessage(payload))
+        await hass.async_block_till_done()
+        assert hass.states.get(mower).state == LawnMowerActivity.MOWING, payload
+
+
+async def test_brand_images_are_shipped() -> None:
+    brand = MANIFEST.parent / "brand"
+    for name in ("icon.png", "icon@2x.png", "logo.png", "logo@2x.png"):
+        assert (brand / name).read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", name
+
+
+async def test_query_action(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    async def _send(method: str, params: dict) -> object:
+        if params["type"] == "GET_ROBOT_STATUS":
+            raise RoborockException('Unexpected API Result: {"type":"ROBOT_STATUS","blade":71}')
+        return ["ok"]
+
+    channel.rpc_channel.send_command.side_effect = _send
+    await _setup(hass, config_entry)
+    [device] = dr.async_entries_for_config_entry(
+        dr.async_get(hass), config_entry.entry_id
+    )
+    response = await hass.services.async_call(
+        DOMAIN,
+        "query",
+        {"device_id": device.id, "query_type": "GET_ROBOT_STATUS"},
+        blocking=True,
+        return_response=True,
+    )
+    assert response == {MOWER_DUID: {"answer": {"type": "ROBOT_STATUS", "blade": 71}}}
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "query",
+            {"device_id": device.id, "query_type": "APP_BUTTON"},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_diagnostics_probe_the_mower(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    async def _send(method: str, params: dict) -> object:
+        if params["type"] == "GET_ROBOT_STATUS":
+            raise RoborockException(
+                'Unexpected API Result: {"blade_hours":23.3,"gps_position":{"lat":1}}'
+            )
+        if params["type"] == "GET_MAP_NAMES":
+            raise RoborockException("Command timed out after 10.0s")
+        return ["ok"]
+
+    channel.rpc_channel.send_command.side_effect = _send
+    await _setup(hass, config_entry)
+    channel.callback(FakeMessage(b'{"dps":{"121":99}}'))
+    diag = await async_get_config_entry_diagnostics(hass, config_entry)
+    probes = diag["mowers"][0]["probes"]
+    assert probes["GET_ROBOT_STATUS"] == {
+        "blade_hours": 23.3,
+        "gps_position": "**REDACTED**",
+    }
+    assert "timed out" in probes["GET_MAP_NAMES"]["error"]
+    assert diag["mowers"][0]["message_counts"]

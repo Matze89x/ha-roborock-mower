@@ -21,6 +21,7 @@ from homeassistant.exceptions import (
     ConfigEntryError,
     ConfigEntryNotReady,
     HomeAssistantError,
+    ServiceValidationError,
 )
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
@@ -33,12 +34,15 @@ from .const import (
     ATTR_AREA_NAMES,
     ATTR_DEVICE_ID,
     ATTR_MAP_NAME,
+    ATTR_PAYLOAD,
+    ATTR_QUERY_TYPE,
     CONF_BASE_URL,
     CONF_USER_DATA,
     DOMAIN,
     PLATFORMS,
     SERVICE_LIST_AREAS,
     SERVICE_MOW_AREAS,
+    SERVICE_QUERY,
 )
 from .coordinator import MowerConfigEntry, MowerRuntimeData, RoborockMowerCoordinator
 from .home_data import SOURCE_CLOUD, HomeDataProvider
@@ -51,6 +55,7 @@ from .vendor.roborock.exceptions import RoborockException, RoborockInvalidCreden
 from .vendor.roborock.mqtt.roborock_session import create_lazy_mqtt_session
 from .vendor.roborock.mqtt.session import MqttSessionUnauthorized
 from .vendor.roborock.protocol import create_mqtt_params
+from .vendor.roborock.roborock_message import RoborockMessageProtocol
 from .vendor.roborock.web_api import RoborockApiClient, UserWebApiClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,11 +78,25 @@ _MOW_AREAS_SCHEMA = vol.Schema(
     }
 )
 
+_QUERY_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Required(ATTR_QUERY_TYPE): cv.string,
+        vol.Optional(ATTR_PAYLOAD, default={}): dict,
+    }
+)
+
 _LIST_AREAS_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional(ATTR_MAP_NAME, default=""): cv.string,
     }
+)
+
+
+# Local keep-alive pings (every 10 s) -- counted, never logged.
+_KEEPALIVE_PROTOCOLS = frozenset(
+    {RoborockMessageProtocol.PING_REQUEST, RoborockMessageProtocol.PING_RESPONSE}
 )
 
 
@@ -87,6 +106,15 @@ def _make_push_handler(
     """Build an MQTT callback that merges live DPS pushes into the coordinator."""
 
     def _handle(message: Any) -> None:
+        protocol = getattr(message, "protocol", None)
+        if mower_api.note_message(protocol) and protocol not in _KEEPALIVE_PROTOCOLS:
+            payload = getattr(message, "payload", None) or b""
+            _LOGGER.debug(
+                "[%s] First %s message from the mower (%d bytes)",
+                duid,
+                getattr(protocol, "name", protocol),
+                len(payload),
+            )
         dps = parse_dps_push(message)
         if not dps:
             return
@@ -164,6 +192,28 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass.services.async_register(
         DOMAIN, SERVICE_MOW_AREAS, _mow_areas, schema=_MOW_AREAS_SCHEMA
+    )
+    async def _query(call: ServiceCall) -> ServiceResponse:
+        result: dict[str, Any] = {}
+        for device_id in call.data[ATTR_DEVICE_ID]:
+            for coordinator in _coordinators_for_device(hass, device_id):
+                try:
+                    answer = await coordinator.mower_api.query(
+                        call.data[ATTR_QUERY_TYPE], **call.data[ATTR_PAYLOAD]
+                    )
+                except ValueError as err:
+                    raise ServiceValidationError(str(err)) from err
+                except RoborockException as err:
+                    raise HomeAssistantError(f"Query failed: {err}") from err
+                result[coordinator.device.duid] = {"answer": answer}
+        return result
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_QUERY,
+        _query,
+        schema=_QUERY_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
         DOMAIN,

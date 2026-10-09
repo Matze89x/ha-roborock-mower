@@ -68,7 +68,8 @@ class RoborockLawnMowerEntity(RoborockMowerEntity, LawnMowerEntity):
     @property
     def activity(self) -> LawnMowerActivity:
         status = self.status
-        activity = derive_activity(status, self.coordinator.mower_api.return_pending)
+        api = self.coordinator.mower_api
+        activity = derive_activity(status, api.return_pending, api.task_pending)
         if activity is None:
             if status.mow_state not in _REPORTED_UNMAPPED:
                 _REPORTED_UNMAPPED.add(status.mow_state)
