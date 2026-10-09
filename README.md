@@ -32,8 +32,9 @@ Was sich in welcher Version geändert hat, steht in den
 - **Schnitthöhe** (Zahl) und **Effizienzmodus** (Auswahl: Täglich / Effizient / Feinschnitt)
 - **Zone mähen: …** (eine Taste pro gespeicherter Zone) – startet das Zonenmähen
 - **Routinen** aus der Roborock-App erscheinen als Tasten
-- **Aktionen** `roborock_mower.mow_areas` (Zonen mähen) und
-  `roborock_mower.list_areas` (Zonen auflisten)
+- **Aktionen** `roborock_mower.mow_areas` (Zonen mähen),
+  `roborock_mower.list_areas` (Zonen auflisten) und `roborock_mower.query`
+  (reine Lese-Abfrage an den Mäher, z. B. `GET_ROBOT_STATUS`, zum Finden neuer Werte)
 
 ## Installation über HACS
 
@@ -143,7 +144,9 @@ What changed in which version is listed in the
 - **Mow Height** (number) and **Efficiency Mode** (select: Daily / Efficient / Manicure)
 - **Mow zone: …** – one button per saved area starts a zone mow
 - **Routines** from the Roborock app appear as buttons
-- **Actions** `roborock_mower.mow_areas` and `roborock_mower.list_areas`
+- **Actions** `roborock_mower.mow_areas`, `roborock_mower.list_areas` and
+  `roborock_mower.query` (read-only query to the mower, e.g. `GET_ROBOT_STATUS`,
+  to discover new values)
 
 ## Installation via HACS
 

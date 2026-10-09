@@ -545,3 +545,65 @@ def test_return_pending_lifecycle() -> None:
     assert api.return_pending
     asyncio.run(api.start())
     assert not api.return_pending
+
+
+def test_task_pending_bridges_start_until_task_reported() -> None:
+    derive = mower_api.derive_activity
+    idle_off_dock = _status(mow_state=0, charge_state=0)
+    assert derive(idle_off_dock) == "idle"
+    assert derive(idle_off_dock, task_pending=True) == "mowing"
+    # A return request wins over a stale start.
+    assert derive(idle_off_dock, return_pending=True, task_pending=True) == "returning"
+
+
+def test_off_dock_value_104_means_returning() -> None:
+    # Live (Q105): DP 143 = 104 while driving back after "return to dock".
+    status = mower_api.MowerStatus.from_dps(
+        {mower_api.DPS_MOW_STATE: 0, mower_api.DPS_CHARGE_STATE: 0, 143: 104}
+    )
+    assert mower_api.derive_activity(status) == "returning"
+
+
+def test_leaving_the_dock_reads_mowing_until_task_state() -> None:
+    api = _api()
+    api.apply_push({mower_api.DPS_MOW_STATE: 0, mower_api.DPS_CHARGE_STATE: 2})
+    assert not api.task_pending
+    api.apply_push({mower_api.DPS_CHARGE_STATE: 0})  # live: 10:13:43, task not named yet
+    assert api.task_pending
+    assert mower_api.derive_activity(api.status, task_pending=api.task_pending) == "mowing"
+    api.apply_push({mower_api.DPS_MOW_STATE: 57})  # "driving to zone"
+    assert not api.task_pending
+
+
+def test_start_command_sets_task_pending() -> None:
+    api = _api_with_result(["ok"])
+    api.apply_push({mower_api.DPS_MOW_STATE: 0, mower_api.DPS_CHARGE_STATE: 0})
+    asyncio.run(api.start())
+    assert api.task_pending
+    asyncio.run(api.dock())
+    assert not api.task_pending
+    assert api.return_pending
+
+
+def test_query_is_read_only() -> None:
+    api = _api_with_result(None)
+    for bad in ("APP_BUTTON", "SET_MOW_PREFERENCE", "remote_cmd"):
+        try:
+            asyncio.run(api.query(bad))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"{bad} must be rejected")
+    sent: dict = {}
+
+    async def _query(payload: dict) -> dict:
+        sent.update(payload)
+        return {"ok": True}
+
+    api._query = _query  # type: ignore[method-assign]
+    assert asyncio.run(
+        api.query("get_robot_status", type="APP_BUTTON", app_button="MOW_GLOBAL", id="1")
+    ) == {"ok": True}
+    # The payload cannot turn a query into a command.
+    assert sent["type"] == "GET_ROBOT_STATUS"
+    assert "id" not in sent

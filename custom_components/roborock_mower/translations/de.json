@@ -101,8 +101,8 @@
       "mow_state": {
         "name": "Mähstatus",
         "state": {
-          "idle": "Bereit",
-          "free": "Bereit (frei)",
+          "idle": "Keine Aufgabe",
+          "free": "Frei",
           "free_initializing": "Initialisiert",
           "free_locating": "Ortet Position",
           "map_initializing": "Kartierung: initialisiert",
@@ -228,6 +228,24 @@
         "map_name": {
           "name": "Kartenname",
           "description": "Optionaler Name der gespeicherten Karte (Standard: aktive Karte)."
+        }
+      }
+    },
+    "query": {
+      "name": "Mäher abfragen",
+      "description": "Stellt dem Mäher eine reine Lese-Abfrage (GET_*) und gibt seine Rohantwort zurück. Hilfsmittel, um Daten zu finden, die die Integration noch nicht anzeigt, z. B. Wartungswerte. Bewegt den Mäher nie und ändert keine Einstellungen.",
+      "fields": {
+        "device_id": {
+          "name": "Mähroboter",
+          "description": "Der/die abzufragende(n) Roborock-Mähroboter."
+        },
+        "query_type": {
+          "name": "Abfrage",
+          "description": "Name der Lese-Abfrage, z. B. GET_ROBOT_STATUS. Muss mit GET_ beginnen."
+        },
+        "payload": {
+          "name": "Zusätzliche Felder",
+          "description": "Optionale weitere Felder für die Abfrage."
         }
       }
     }

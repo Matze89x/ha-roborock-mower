@@ -30,3 +30,22 @@ list_areas:
       example: "APP_MAP1"
       selector:
         text:
+
+query:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: roborock_mower
+          multiple: true
+    query_type:
+      required: true
+      example: "GET_ROBOT_STATUS"
+      selector:
+        text:
+    payload:
+      required: false
+      example: "{}"
+      selector:
+        object:
