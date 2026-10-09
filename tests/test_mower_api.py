@@ -646,3 +646,20 @@ def test_query_is_read_only() -> None:
     # The payload cannot turn a query into a command.
     assert sent["type"] == "GET_ROBOT_STATUS"
     assert "id" not in sent
+
+
+def test_map_data_goes_through_the_map_channel() -> None:
+    """Asked over the local connection the mower only answers ["ok"]."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    channel = MagicMock()
+    channel.map_rpc_channel.send_command = AsyncMock(return_value=b"MAP")
+    api = mower_api.MowerApi(MagicMock(), channel, MagicMock(), "duid")
+    assert asyncio.run(api.get_map_data("get_full_map", "APP_MAP1.bin")) == b"MAP"
+    params = channel.map_rpc_channel.send_command.await_args.kwargs["params"]
+    assert params["type"] == "GET_FULL_MAP"
+    assert params["modify_map"] == {"name": "APP_MAP1.bin"}
+    assert api.history[-1]["result"] == "<3 bytes>"
+    with pytest.raises(ValueError):
+        asyncio.run(api.get_map_data("SET_FULL_MAP"))
+    channel.rpc_channel.send_command.assert_not_called()

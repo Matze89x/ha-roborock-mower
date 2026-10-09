@@ -339,6 +339,9 @@ def test_sensor_values_from_the_live_status() -> None:
         "mobile_network": "connected",
         "rtk_position": "fixed_solution",
         "hardware_error": "none",
+        "remaining_mow_time": 0,
+        "blade_speed": 0,
+        "speed": 0,
         "wifi_quality": "good",
         "wifi_state": "connected",
         "wifi_band": "2.4G",
@@ -392,6 +395,26 @@ def test_sensor_values_from_the_live_status() -> None:
         "days": ["friday"],
         "mode": "global",
     }
+
+
+def test_live_values_while_mowing() -> None:
+    """Captured on the Q105 at 80 % of a scheduled whole-lawn mow."""
+    status = copy.deepcopy(LIVE_STATUS)
+    status["navigation"]["nav_task_progress"] = {
+        "task": "MOW",
+        "percent": 80,
+        "area": 79.1225052,
+        "current_area": {"id": 2, "percent": 80, "percentage": 80.5270309},
+        "percentage": 80.5270309,
+        "expected_time": 2576.40625,
+    }
+    status["hardware"]["cutter_info"]["main_cutter_speed"] = -2799
+    status["hardware"]["wheel"] = {"linear_velocity": 0.401152462, "angular_velocity": -0.1}
+    info = RobotInfo(status=status, preference={}, now=dt_util.now())
+    values = {desc.key: desc.value_fn(info) for desc in ROBOT_STATUS_SENSORS}
+    assert values["remaining_mow_time"] == 502
+    assert values["blade_speed"] == 2799
+    assert values["speed"] == pytest.approx(0.401152462)
 
 
 def test_hardware_error_from_the_controller() -> None:
@@ -786,18 +809,25 @@ async def test_save_map_data_writes_the_captured_messages(
     answer = _answering(calls)
 
     async def _send(method: str, params: dict) -> object:
-        if params["type"] == "GET_MAP_MOW_SNAPSHOT":
-            # The map arrives as a separate message while the action waits.
-            channel.callback(SimpleNamespace(protocol=301, payload=b"\x08\x01map"))
-            channel.callback(SimpleNamespace(protocol=2, payload=b"ping"))
-            return ["ok"]
-        if params["type"] == "GET_FULL_MAP":
-            raise RoborockException('Unexpected API Result: "AAEC"')
         return await answer(method, params)
 
+    async def _map(method: str, params: dict) -> bytes:
+        # Asked through the map channel, the mower sends the map itself.
+        if params["type"] == "GET_FULL_MAP":
+            assert params["modify_map"] == {"name": "APP_MAP1.bin"}
+            return b"\x00\x01\x02"
+        if params["type"] == "GET_MAP_MOW_SNAPSHOT":
+            # Every raw message during the recording is kept (pings aside).
+            channel.callback(SimpleNamespace(protocol=301, payload=b"\x08\x01map"))
+            channel.callback(SimpleNamespace(protocol=2, payload=b"ping"))
+        raise RoborockException("Command timed out after 10.0s")
+
     channel.rpc_channel.send_command.side_effect = _send
+    channel.map_rpc_channel.send_command.side_effect = _map
     hass.config.config_dir = str(tmp_path)
     await _setup(hass, config_entry)
+    coordinator = config_entry.runtime_data.coordinators[0]
+    await _wait_until(hass, lambda: coordinator.robot_status is not None)
     [device] = dr.async_entries_for_config_entry(dr.async_get(hass), config_entry.entry_id)
     response = await hass.services.async_call(
         DOMAIN,
@@ -816,15 +846,12 @@ async def test_save_map_data_writes_the_captured_messages(
             "base64": "CAFtYXA=",
         }
     ]
-    assert result["answers"]["GET_FULL_MAP"] == "AAEC"
+    assert result["map_name"] == "APP_MAP1.bin"
+    assert result["answers"]["GET_FULL_MAP"] == {"bytes": 3, "base64": "AAEC"}
+    assert "timed out" in result["answers"]["GET_MAP_DIFFS"]["error"]
     folder = Path(result["folder"])
     assert folder.parent == tmp_path / DOMAIN
     assert (folder / "000_p301.bin").read_bytes() == b"\x08\x01map"
-    assert (folder / "GET_FULL_MAP.bin").read_bytes() == b"\x00\x01\x02"
-    assert json.loads((folder / "GET_MAP_DIFFS.json").read_text()) == ["ok"]
-    assert set(result["files"]) >= {
-        "000_p301.bin",
-        "GET_FULL_MAP.bin",
-        "GET_MAP_MOW_SNAPSHOT.json",
-    }
+    assert (folder / "GET_FULL_MAP_map.bin").read_bytes() == b"\x00\x01\x02"
+    assert set(result["files"]) >= {"000_p301.bin", "GET_FULL_MAP_map.bin"}
     assert await hass.config_entries.async_unload(config_entry.entry_id)

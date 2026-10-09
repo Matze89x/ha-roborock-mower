@@ -1039,6 +1039,38 @@ class MowerApi:
 
     # -- routines / scenes ------------------------------------------------------
 
+    async def get_map_data(self, query_type: str, map_name: str = "") -> bytes | None:
+        """Map data (``GET_FULL_MAP``, ``GET_MAP_MOW_SNAPSHOT`` ...), decrypted.
+
+        Like the app, and like the vacuums' map, the request goes through the
+        cloud MQTT channel with the encryption details the answer needs: the
+        mower answers ``["ok"]`` and sends the map as a separate (protocol 301)
+        message, which the bundled library decrypts and unpacks. Asked over the
+        local connection, the mower only says ``["ok"]``.
+        """
+        query_type = query_type.strip().upper()
+        if not query_type.startswith("GET_"):
+            raise ValueError("Only read-only GET_* queries are allowed")
+        message = {
+            "id": str(int(time.time() * 1000)),
+            "type": query_type,
+            "modify_map": {"name": map_name},
+        }
+        try:
+            result = await self._channel.map_rpc_channel.send_command(
+                "remote_pb", params=message
+            )
+        except RoborockException as err:
+            self._record("command", command=f"{query_type} (map)", error=_short(str(err)))
+            raise
+        data = bytes(result) if isinstance(result, (bytes, bytearray)) else None
+        self._record(
+            "command",
+            command=f"{query_type} (map)",
+            result=f"<{len(data)} bytes>" if data is not None else _short(result),
+        )
+        return data
+
     async def get_routines(self) -> list[HomeDataScene]:
         """Fetch app-defined routines/scenes for this device."""
         return await self._web_api.get_routines(self._duid)

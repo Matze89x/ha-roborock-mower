@@ -3,6 +3,37 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.3.2 – Map through the right channel, live values while mowing
+
+**Kurzfassung (Deutsch):** Die Aufzeichnung von 0.3.1 hat gezeigt, warum keine
+Karte kam: Über die lokale Verbindung antwortet der Mäher auf Kartenanfragen
+nur mit „ok“. Die Karte schickt er verschlüsselt über die Cloud an den, der
+dort gefragt hat. Genau so holt die Bibliothek auch die Karten der
+Roborock-Sauger. „Kartendaten speichern“ fragt jetzt auf diesem Weg und
+liefert die entschlüsselte Karte als Base64 mit.
+
+Neu sind außerdem **Verbleibende Mähzeit** (geschätzt), **Messerdrehzahl**
+und **Fahrgeschwindigkeit** während des Mähens. Eine Warnung von Home
+Assistant 2026.10 (veraltete Geräte-Suche) ist behoben.
+
+### New
+
+- `MowerApi.get_map_data()`: `GET_FULL_MAP`, `GET_MAP_MOW_SNAPSHOT` and
+  `GET_MAP_DIFFS` go through the bundled library's map channel (MQTT with
+  the security endpoint and nonce); the protocol-301 answer comes back
+  decrypted and unpacked. `save_map_data` uses it with the saved map's name
+  and returns each map as base64 (and saves `<query>_map.bin`).
+- Sensors: remaining mowing time (expected time of the running task × what
+  is left, 0 without a task); diagnostic: blade speed (rpm) and driving
+  speed (km/h), 0 when standing.
+- Translation for `mow_global` (working / system state while mowing).
+- Capture of the full status while mowing in `docs/`.
+
+### Fixes
+
+- Use `async_get_device_by_identifier` (Home Assistant 2026.10) instead of
+  the deprecated `async_get_device`, which logged a warning at startup.
+
 ## 0.3.1 – Map data to copy
 
 **Kurzfassung (Deutsch):** „Kartendaten speichern“ liefert die

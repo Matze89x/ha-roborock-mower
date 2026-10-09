@@ -355,7 +355,8 @@
       "runtime_state": {
         "name": "System state",
         "state": {
-          "normal": "Normal"
+          "normal": "Normal",
+          "mow_global": "Mowing (whole lawn)"
         }
       },
       "ota_state": {
@@ -369,7 +370,8 @@
       "working_state": {
         "name": "Working state",
         "state": {
-          "idle": "Idle"
+          "idle": "Idle",
+          "mow_global": "Mowing (whole lawn)"
         }
       },
       "docking_state": {
@@ -480,6 +482,15 @@
       },
       "battery_capacity": {
         "name": "Battery capacity"
+      },
+      "remaining_mow_time": {
+        "name": "Remaining mowing time"
+      },
+      "blade_speed": {
+        "name": "Blade speed"
+      },
+      "speed": {
+        "name": "Driving speed"
       }
     },
     "number": {

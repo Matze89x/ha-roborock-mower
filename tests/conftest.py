@@ -179,6 +179,9 @@ class FakeChannel:
         self.subscribe_error: Exception | None = None
         self.rpc_channel = MagicMock()
         self.rpc_channel.send_command = AsyncMock(return_value=["ok"])
+        # Map data comes through its own (cloud) channel as decrypted bytes.
+        self.map_rpc_channel = MagicMock()
+        self.map_rpc_channel.send_command = AsyncMock(return_value=b"")
         self.is_connected = True
         self.is_local_connected = False
 

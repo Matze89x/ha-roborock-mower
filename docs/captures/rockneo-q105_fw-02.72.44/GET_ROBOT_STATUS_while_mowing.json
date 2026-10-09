@@ -1,0 +1,197 @@
+{
+ "id": "1791509654950",
+ "type": "ROBOT_STATUS",
+ "map_names": [
+  "APP_MAP1.bin"
+ ],
+ "slam": {
+  "type": "INIT",
+  "init_status": true
+ },
+ "navigation": {
+  "type": "ERROR",
+  "nav_sub_state": "ZIG_ZAG",
+  "map": {
+   "robot_pose": {
+    "f_x": 7.62767506,
+    "f_y": -7.32317543,
+    "f_yaw": -0.43553102
+   }
+  },
+  "nav_task": "MOW",
+  "nav_status": "MOW_GLOBAL",
+  "nav_task_progress": {
+   "task": "MOW",
+   "percent": 80,
+   "area": 79.1225052,
+   "current_area": {
+    "id": 2,
+    "percent": 80,
+    "percentage": 80.5270309
+   },
+   "percentage": 80.5270309,
+   "expected_time": 2576.40625
+  },
+  "nav_error": {
+   "delete_errors": [
+    "NO_MAP",
+    "MAP_EXCEEDS_LIMIT",
+    "ROBOT_OUT_OF_BOUND",
+    "ROBOT_IN_ISLAND"
+   ]
+  },
+  "nav_robot_status": {
+   "type": "NORMAL"
+  },
+  "ai_obs_cmd": {
+   "generic_obs_avoidance": true,
+   "class_obs_avoidance": true
+  },
+  "robot_gps": "**REDACTED**",
+  "geofence_error": {
+   "delete_errors": [
+    "OUTSIDE_E_FENCE"
+   ]
+  },
+  "detail_state": "ROUTE_FOLLOW",
+  "nav_region_progress": {
+   "type": "PROGRESS",
+   "regions": [
+    {
+     "id": 2,
+     "coverage_rate": 80.5270309,
+     "end_datetime": "1791533671"
+    }
+   ]
+  },
+  "living_obstacle": {},
+  "map_editing": false,
+  "rgb_map_info": {
+   "is_blank": false,
+   "timestamp": "37566902",
+   "image_width": 297,
+   "image_height": 307,
+   "origin_x": -0.6460263729095459,
+   "origin_y": -11.889997482299805,
+   "resolution": 0.05
+  }
+ },
+ "hardware": {
+  "battery": {
+   "percent": 86
+  },
+  "mcu_state": "RUN",
+  "cutter_info": {
+   "type": "MAIN_CUTTER_SPEED",
+   "main_cutter_speed": -2799,
+   "has_edge_cutter": true
+  },
+  "wheel": {
+   "linear_velocity": 0.401152462,
+   "angular_velocity": -0.119245246
+  },
+  "safety_lock_status": false
+ },
+ "network": {
+  "mac": "**REDACTED**",
+  "ip": "**REDACTED**",
+  "ssid": "**REDACTED**",
+  "bssid": "**REDACTED**",
+  "rssi": -69,
+  "wifi_band": "2.4G"
+ },
+ "fsm_map_state": "IDLE",
+ "fsm_mow_state": "MOW_GLOBAL",
+ "fsm_dock_state": "IDLE",
+ "fsm_ota_state": "IDLE",
+ "fsm_charge_state": "IDLE",
+ "fsm_mcu_state": "RUN",
+ "bluetooth": "**REDACTED**",
+ "mow_progress": {
+  "mow_all_area": 79.1225052,
+  "expected_time": 2464.03125,
+  "cur_mow_progress": 80.5270233,
+  "regions": [
+   {
+    "id": 2,
+    "coverage_rate": 3.21021199,
+    "cur_coverage_rate": 80.5270309
+   }
+  ]
+ },
+ "rtk": {
+  "position_type": "FLOAT_SOLUTION",
+  "nrtk": {
+   "result": "SWITCHSUCCESS",
+   "rtk_mode": "BASE_RTK",
+   "dock_nrtk_status": "DOCK_NRTK_DISABLE",
+   "account_mode": "NO_ACCOUNT"
+  }
+ },
+ "runtime_task": "MOW",
+ "runtime_state": "MOW_GLOBAL",
+ "fsm_errors": {},
+ "wireless_devices": {
+  "rtk_position": "FLOAT_SOLUTION",
+  "route": "WLAN0",
+  "wifi": {
+   "state": "CONNECTED",
+   "level": "GOOD"
+  },
+  "mobile_4g": {
+   "state": "CONNECTED"
+  }
+ },
+ "mow_working_state": "MOW_GLOBAL",
+ "fsm_anti_theft_state": "CLOSED",
+ "nav_event": "NAV_MOW_ROUTE_FOLLOW",
+ "fsm_rtk_state": "ACTIVE",
+ "robot_task": {
+  "working_state": "MOW_GLOBAL",
+  "robot_detail_state": "MOW_ZIG_ZAG"
+ },
+ "mowing_zones": [
+  {
+   "id": 2
+  }
+ ],
+ "mow_continue": {
+  "plan_id": 2204435469,
+  "plan_start": "1791028800",
+  "plan_end": "1791043200"
+ },
+ "map_abstracts": [
+  {
+   "name": "APP_MAP1.bin",
+   "file_change_time": "2026-10-09-08-15-21"
+  }
+ ],
+ "next_plan": {
+  "id": 2204435469,
+  "start": "1791028800",
+  "end": "1791043200",
+  "days": [
+   {
+    "type": "SATURDAY"
+   }
+  ],
+  "mode": "GLOBAL",
+  "fsm_state": "MOW_GLOBAL"
+ },
+ "fsm_energy_state": "NORMAL",
+ "last_mow_abstract": {
+  "start": {
+   "time": "1791533613"
+  },
+  "end": {
+   "type": "APP_END",
+   "time": "1791533671"
+  },
+  "area": 1.2750001,
+  "fsm_state": "MOW_GLOBAL",
+  "seconds": 43,
+  "percentage": 3.21021199,
+  "abnormal_end": false
+ },
+ "lora_status": "PAIRED"
+}

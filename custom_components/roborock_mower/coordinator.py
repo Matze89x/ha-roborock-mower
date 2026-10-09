@@ -206,7 +206,11 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
 
     def _update_device_model(self) -> None:
         registry = dr.async_get(self.hass)
-        device = registry.async_get_device(identifiers={(DOMAIN, self.device.duid)})
+        identifier = (DOMAIN, self.device.duid)
+        if lookup := getattr(registry, "async_get_device_by_identifier", None):
+            device = lookup(identifier, self.config_entry.entry_id)
+        else:  # Home Assistant before 2026.10
+            device = registry.async_get_device(identifiers={identifier})
         if device is not None and device.model != self.model_name:
             registry.async_update_device(device.id, model=self.model_name)
 
