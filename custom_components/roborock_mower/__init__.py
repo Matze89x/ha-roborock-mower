@@ -66,7 +66,7 @@ from .mower_api import (
     parse_dps_push,
     redact_dps,
 )
-from .robot_status import redact_private, shorten_long_strings
+from .robot_status import frame_content, redact_private, shorten_long_strings
 from .storage import MowerCacheStore
 from .vendor.roborock.data import HomeData, UserData
 from .vendor.roborock.devices.cache import DeviceCache
@@ -257,11 +257,13 @@ async def _scan(coordinator: RoborockMowerCoordinator, names: list[str]) -> dict
 async def _capture_map_data(
     hass: HomeAssistant, coordinator: RoborockMowerCoordinator, wait: int
 ) -> dict[str, Any]:
-    """Keep every message for ``wait`` seconds after asking for the map; save it.
+    """Keep every message for ``wait`` seconds after asking for the map.
 
-    Files go to ``<config>/roborock_mower/map_<time>/``: the raw messages
-    (``NNN_p<protocol>.bin``) and the query answers. Raw map messages can't be
-    cleaned of private data -- share them privately, not publicly.
+    The messages come back in the answer (and the diagnostics) -- JSON
+    unpacked and redacted, anything else as base64 -- and are also saved in
+    ``<config>/roborock_mower/map_<time>/`` (``NNN_p<protocol>.bin`` plus the
+    query answers). Binary map data can't be cleaned of private data: share
+    it privately, not publicly.
     """
     api = coordinator.mower_api
     api.start_capture()
@@ -283,12 +285,19 @@ async def _capture_map_data(
         frames = api.stop_capture()
     folder = Path(hass.config.path(DOMAIN, f"map_{dt_util.now():%Y%m%d_%H%M%S}"))
     files = await hass.async_add_executor_job(_write_map_data, folder, frames, answers)
-    return {
+    result = {
         "folder": str(folder),
-        "messages": len(frames),
-        "files": files,
-        "note": "Raw map data may show your garden; share it privately.",
+        "files": [entry["file"] for entry in files],
+        "note": "Map data may show your garden; share it privately.",
+        "answers": answers,
+        "messages": [
+            {"time": received, "protocol": protocol, "bytes": len(payload)}
+            | frame_content(payload)
+            for received, protocol, payload in frames
+        ],
     }
+    api.last_capture = result
+    return result
 
 
 def _write_map_data(

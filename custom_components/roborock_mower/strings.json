@@ -605,7 +605,7 @@
     },
     "save_map_data": {
       "name": "Save map data",
-      "description": "Asks the mower for its map and saves everything it sends during the waiting time as files in the folder roborock_mower of your configuration. Used to decode the map format. Raw map data can show your garden: share it privately only.",
+      "description": "Asks the mower for its map and records everything it sends during the waiting time. The answer contains the data (JSON readable, binary as base64) so it can simply be copied; it is also in the diagnostics and saved as files in the folder roborock_mower of your configuration. Used to decode the map format. Map data can show your garden: share it privately only.",
       "fields": {
         "device_id": {
           "name": "Mower",

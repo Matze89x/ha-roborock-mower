@@ -544,6 +544,8 @@ class MowerApi:
         self._left_dock_at: float | None = None
         # Raw messages while save_map_data captures: (time, protocol, payload).
         self._capture: list[tuple[str, int, bytes]] | None = None
+        # The result of the last save_map_data (shown in the diagnostics).
+        self.last_capture: dict[str, Any] | None = None
 
     @property
     def duid(self) -> str:
