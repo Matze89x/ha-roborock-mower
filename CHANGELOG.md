@@ -3,6 +3,23 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.3.3 – More ways to the map
+
+**Kurzfassung (Deutsch):** Auch über die Cloud hat der Mäher auf die
+Kartenanfragen nur mit „ok“ geantwortet; eine Karte kam nicht. In der
+Roborock-App stehen zwei weitere Kartenbefehle, `get_map` und `get_map_diff`.
+„Kartendaten speichern“ probiert sie jetzt auch, jeweils über die Cloud und
+lokal. Laut den Werkzeugen des ursprünglichen Projekts sendet der Mäher Karte
+und Fahrweg vor allem **während des Mähens** als eigene Datenströme. Deshalb
+die Aufzeichnung am besten während einer Fahrt starten.
+
+### Changes
+
+- `save_map_data` also asks the app's map RPCs `get_map` and `get_map_diff`,
+  each through the map channel (cloud, encrypted answer) and the normal
+  one; map bytes come back as base64, text answers as they are (redacted,
+  long strings shortened). New `MowerApi.get_map_rpc()`.
+
 ## 0.3.2 – Map through the right channel, live values while mowing
 
 **Kurzfassung (Deutsch):** Die Aufzeichnung von 0.3.1 hat gezeigt, warum keine

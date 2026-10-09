@@ -60,13 +60,20 @@ from .app_plugin import async_find_query_names, async_find_strings
 from .coordinator import MowerConfigEntry, MowerRuntimeData, RoborockMowerCoordinator
 from .home_data import SOURCE_CLOUD, HomeDataProvider
 from .mower_api import (
+    MAP_RPC_METHODS,
     MowerApi,
     MowerCommandRejected,
     is_mower,
     parse_dps_push,
     redact_dps,
 )
-from .robot_status import dig, frame_content, redact_private, shorten_long_strings
+from .robot_status import (
+    FRAME_SHOW_LIMIT,
+    dig,
+    frame_content,
+    redact_private,
+    shorten_long_strings,
+)
 from .storage import MowerCacheStore
 from .vendor.roborock.data import HomeData, UserData
 from .vendor.roborock.devices.cache import DeviceCache
@@ -292,6 +299,23 @@ async def _capture_map_data(
                 answers[name] = {"bytes": len(data)} | frame_content(data)
             else:
                 answers[name] = {"error": "no map data in the answer"}
+        # The app's map RPCs, through the map channel and the normal one.
+        for method in MAP_RPC_METHODS:
+            for map_channel in (True, False):
+                key = f"{method}_{'map' if map_channel else 'rpc'}"
+                try:
+                    async with asyncio.timeout(MAP_TIMEOUT):
+                        result = await api.get_map_rpc(method, map_channel=map_channel)
+                except (TimeoutError, RoborockException) as err:
+                    answers[key] = {"error": str(err)[:200] or "no answer"}
+                    continue
+                if isinstance(result, bytes):
+                    maps[key] = result
+                    answers[key] = {"bytes": len(result)} | frame_content(result)
+                else:
+                    answers[key] = shorten_long_strings(
+                        redact_private(result), FRAME_SHOW_LIMIT
+                    )
         await asyncio.sleep(wait)
     finally:
         frames = api.stop_capture()

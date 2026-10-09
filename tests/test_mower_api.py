@@ -663,3 +663,19 @@ def test_map_data_goes_through_the_map_channel() -> None:
     with pytest.raises(ValueError):
         asyncio.run(api.get_map_data("SET_FULL_MAP"))
     channel.rpc_channel.send_command.assert_not_called()
+
+
+def test_map_rpc_returns_what_the_mower_sends() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    channel = MagicMock()
+    channel.map_rpc_channel.send_command = AsyncMock(return_value=b"PB\x01")
+    channel.rpc_channel.send_command = AsyncMock(
+        side_effect=RoborockException("Unexpected API Result: CgQIARAC")
+    )
+    api = mower_api.MowerApi(MagicMock(), channel, MagicMock(), "duid")
+    assert asyncio.run(api.get_map_rpc("get_map", map_channel=True)) == b"PB\x01"
+    # A text answer python-roborock can't parse comes back as the text.
+    assert asyncio.run(api.get_map_rpc("get_map", map_channel=False)) == "CgQIARAC"
+    with pytest.raises(ValueError):
+        asyncio.run(api.get_map_rpc("app_start", map_channel=False))
