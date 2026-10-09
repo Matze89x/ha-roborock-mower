@@ -3,6 +3,22 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.3.1 – Map data to copy
+
+**Kurzfassung (Deutsch):** „Kartendaten speichern“ liefert die
+aufgezeichneten Daten jetzt direkt in der Antwort der Aktion: JSON lesbar,
+Binäres als Base64. Sie stehen auch in der Diagnose. Man muss die Dateien
+also nicht mehr aus dem Konfigurationsordner holen, was mit dem File Editor
+nicht ging. Private Felder in lesbaren Nachrichten werden geschwärzt.
+
+### Changes
+
+- `save_map_data` answers with every recorded message: JSON with the RPC
+  answer nested in data point 102 unpacked and private fields redacted,
+  anything else as base64 (up to 512 KB each), plus the query answers. The
+  last recording is part of the diagnostics (`map_capture`). The files are
+  still written.
+
 ## 0.3.0 – Settings to switch, fault history, schedules, stop
 
 **Kurzfassung (Deutsch):** Einstellungen lassen sich jetzt auch ändern, nicht

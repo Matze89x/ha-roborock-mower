@@ -121,6 +121,8 @@ def _mower_diagnostics(
             for item in (product.schema or [])
         ],
         "history": list(api.history),
+        # The last "save map data" recording, if any (for decoding the map).
+        "map_capture": api.last_capture,
     }
 
 

@@ -478,6 +478,17 @@ def test_translations_cover_every_entity() -> None:
             assert desc.translation_key in entity["binary_sensor"], (name, desc.key)
 
 
+def test_frame_content_unpacks_rpc_answers() -> None:
+    from custom_components.roborock_mower.robot_status import frame_content
+
+    inner = json.dumps({"id": 1, "result": json.dumps({"map": {"ip": "192.0.2.10"}})})
+    payload = json.dumps({"dps": {"102": inner}, "t": 5}).encode()
+    assert frame_content(payload) == {
+        "json": {"dps": {"102": {"id": 1, "result": {"map": {"ip": REDACTED}}}}, "t": 5}
+    }
+    assert frame_content(b"\x08\x01") == {"base64": "CAE="}
+
+
 def test_message_counts_use_protocol_names() -> None:
     api = MowerApi.__new__(MowerApi)
     api.message_counts = {}
@@ -796,13 +807,22 @@ async def test_save_map_data_writes_the_captured_messages(
         return_response=True,
     )
     result = response[MOWER_DUID]
-    assert result["messages"] == 1
+    # The data is in the answer itself: binary as base64, JSON unpacked.
+    assert result["messages"] == [
+        {
+            "time": result["messages"][0]["time"],
+            "protocol": 301,
+            "bytes": 5,
+            "base64": "CAFtYXA=",
+        }
+    ]
+    assert result["answers"]["GET_FULL_MAP"] == "AAEC"
     folder = Path(result["folder"])
     assert folder.parent == tmp_path / DOMAIN
     assert (folder / "000_p301.bin").read_bytes() == b"\x08\x01map"
     assert (folder / "GET_FULL_MAP.bin").read_bytes() == b"\x00\x01\x02"
     assert json.loads((folder / "GET_MAP_DIFFS.json").read_text()) == ["ok"]
-    assert {entry["file"] for entry in result["files"]} >= {
+    assert set(result["files"]) >= {
         "000_p301.bin",
         "GET_FULL_MAP.bin",
         "GET_MAP_MOW_SNAPSHOT.json",

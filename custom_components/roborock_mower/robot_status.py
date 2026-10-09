@@ -8,7 +8,9 @@ Paths below were taken from a live RockNeo Q105 (firmware 02.72.44).
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, field
+import json
 from datetime import UTC, date, datetime, time as dt_time, timedelta
 from typing import Any
 
@@ -233,3 +235,32 @@ def in_daily_window(start: str, end: str, now: datetime) -> bool:
     if start <= end:
         return start <= current < end
     return current >= start or current < end
+
+
+# Raw messages shown in an action answer or the diagnostics up to this size.
+FRAME_SHOW_LIMIT = 512 * 1024
+
+
+def _unpack_json(value: Any, parses: int = 0) -> Any:
+    """Parse JSON text nested in JSON (the RPC answer inside data point 102)."""
+    if isinstance(value, str) and value[:1] in "{[" and parses < 4:
+        try:
+            return _unpack_json(json.loads(value), parses + 1)
+        except ValueError:
+            return value
+    if isinstance(value, dict):
+        return {key: _unpack_json(item, parses) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_unpack_json(item, parses) for item in value]
+    return value
+
+
+def frame_content(payload: bytes) -> dict[str, Any]:
+    """A raw message in readable form: JSON (unpacked, redacted) or base64."""
+    if len(payload) > FRAME_SHOW_LIMIT:
+        return {"omitted": f"{len(payload)} bytes, see the saved file"}
+    try:
+        data = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return {"base64": base64.b64encode(payload).decode()}
+    return {"json": redact_private(_unpack_json(data))}

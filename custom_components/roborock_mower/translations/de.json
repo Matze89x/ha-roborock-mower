@@ -605,7 +605,7 @@
     },
     "save_map_data": {
       "name": "Kartendaten speichern",
-      "description": "Fragt den Mäher nach seiner Karte und speichert alles, was er während der Wartezeit sendet, als Dateien im Ordner roborock_mower deiner Konfiguration. Dient dazu, das Kartenformat zu entschlüsseln. Rohe Kartendaten können deinen Garten zeigen: nur privat weitergeben.",
+      "description": "Fragt den Mäher nach seiner Karte und zeichnet alles auf, was er während der Wartezeit sendet. Die Antwort enthält die Daten (JSON lesbar, Binäres als Base64), sodass du sie einfach kopieren kannst; sie stehen auch in der Diagnose und werden als Dateien im Ordner roborock_mower deiner Konfiguration gespeichert. Dient dazu, das Kartenformat zu entschlüsseln. Kartendaten können deinen Garten zeigen: nur privat weitergeben.",
       "fields": {
         "device_id": {
           "name": "Mähroboter",
