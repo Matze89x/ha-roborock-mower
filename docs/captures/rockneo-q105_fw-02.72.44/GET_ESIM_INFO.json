@@ -1,0 +1,9 @@
+{
+  "type": "ESIM_INFO",
+  "esim_info": {
+    "sim_type": "ESIM",
+    "lte_type": "LTE_UNKNOWN",
+    "mobile_operator": "Unknown",
+    "ip_addr": "--"
+  }
+}

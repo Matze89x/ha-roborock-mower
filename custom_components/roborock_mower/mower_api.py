@@ -305,6 +305,11 @@ LEFT_DOCK_GRACE = 60
 # Entries kept in the in-memory event history (shown in the diagnostics).
 HISTORY_SIZE = 300
 
+# save_map_data: messages kept while capturing (all but keep-alive pings).
+CAPTURE_LIMIT = 500
+CAPTURE_MAX_BYTES = 2 * 1024 * 1024
+_KEEPALIVE_CODES = frozenset({2, 3})  # PING_REQUEST, PING_RESPONSE
+
 
 def derive_activity(
     status: MowerStatus, return_pending: bool = False, task_pending: bool = False
@@ -537,6 +542,8 @@ class MowerApi:
         self._return_requested_at: float | None = None
         self._task_requested_at: float | None = None
         self._left_dock_at: float | None = None
+        # Raw messages while save_map_data captures: (time, protocol, payload).
+        self._capture: list[tuple[str, int, bytes]] | None = None
 
     @property
     def duid(self) -> str:
@@ -591,6 +598,26 @@ class MowerApi:
         first = name not in self.message_counts
         self.message_counts[name] = self.message_counts.get(name, 0) + 1
         return first
+
+    def start_capture(self) -> None:
+        """Keep every raw message from now on (map and path frames, ...)."""
+        self._capture = []
+
+    def stop_capture(self) -> list[tuple[str, int, bytes]]:
+        """End a capture and return what arrived: (time, protocol, payload)."""
+        frames, self._capture = self._capture or [], None
+        return frames
+
+    def note_frame(self, protocol: Any, payload: bytes | None) -> None:
+        """Keep a raw message while capturing (keep-alive pings excepted)."""
+        if self._capture is None or not payload or len(self._capture) >= CAPTURE_LIMIT:
+            return
+        try:
+            code = int(protocol)
+        except (TypeError, ValueError):
+            code = -1
+        if code not in _KEEPALIVE_CODES:
+            self._capture.append((_now(), code, bytes(payload[:CAPTURE_MAX_BYTES])))
 
     def _record(self, kind: str, **data: Any) -> None:
         self.history.append({"time": _now(), "kind": kind, **data})
@@ -814,32 +841,42 @@ class MowerApi:
             }
         )
         try:
-            pref = await self._get_global_mow_preference() or {}
-            pref["height"] = height
-            await self._send_remote_msg(
-                {"type": TYPE_SET_MOW_PREFERENCE, "mow_preference": pref}
-            )
+            await self.set_mow_preference(height=height)
         except RoborockException as err:
             _LOGGER.debug("[%s] height preference persist failed: %s", self._duid, err)
+        return result
+
+    async def set_mow_preference(self, **changes: Any) -> Any:
+        """Change fields of the global mowing preference (``SET_MOW_PREFERENCE``).
+
+        The mower replaces the whole preference, so the current one is read
+        first and sent back with the changes -- a partial preference would
+        reset passes, direction, edge cut and so on. Refused (an error) when
+        the current preference can't be read.
+        """
+        pref = await self._get_global_mow_preference()
+        if pref is None:
+            raise RoborockException("Could not read the mowing preferences from the mower")
+        pref = {**pref, **changes}
+        result = await self._send_remote_msg(
+            {"type": TYPE_SET_MOW_PREFERENCE, "mow_preference": pref}
+        )
+        # Show the change right away; the next settings read confirms it.
+        if isinstance(self.preference_config, dict):
+            self.preference_config["global"] = pref
         return result
 
     async def set_mow_eff_mode(self, mode: int) -> Any:
         """Set the efficiency mode (MowPreference.effective) via SET_MOW_PREFERENCE.
 
-        Efficiency mode is a field of the mowing *preference*, not a command DPS.
-        We read-modify-write the global preference so height/direction/etc. are
-        preserved; ``effective`` is written as the protobuf enum name the device
-        itself reports (e.g. "DAILY"). Falls back to a minimal update if the
-        current preference can't be read back.
+        Efficiency mode is a field of the mowing *preference*, not a command DPS;
+        ``effective`` is written as the protobuf enum name the device itself
+        reports (e.g. "DAILY"). See :meth:`set_mow_preference`.
         """
         effective = EFF_MODE_WIRE.get(mode)
         if effective is None:
             raise ValueError(f"Unknown efficiency mode: {mode}")
-        pref = await self._get_global_mow_preference() or {}
-        pref["effective"] = effective
-        return await self._send_remote_msg(
-            {"type": TYPE_SET_MOW_PREFERENCE, "mow_preference": pref}
-        )
+        return await self.set_mow_preference(effective=effective)
 
     async def query(self, query_type: str, **extra: Any) -> Any:
         """Send a read-only remote_pb query (``GET_*``) and return its answer.
@@ -861,8 +898,22 @@ class MowerApi:
         Raw answer: it contains the mower's GPS position and network details,
         so callers redact it before showing or exporting it.
         """
-        resp = await self._query({"type": TYPE_GET_ROBOT_STATUS}, record=record)
-        if not isinstance(resp, dict) or resp.get("type", "ROBOT_STATUS") != "ROBOT_STATUS":
+        return await self.get_info(TYPE_GET_ROBOT_STATUS, record=record)
+
+    async def get_info(
+        self, query_type: str, *, record: bool = True
+    ) -> dict[str, Any] | None:
+        """Answer of a ``GET_*`` info query (``GET_USER_MODE_CONFIG`` ...), or None.
+
+        None when the mower answers with something else than the matching
+        ``{"type": "USER_MODE_CONFIG", ...}`` object. Raw: callers redact it.
+        """
+        resp = await self._query({"type": query_type}, record=record)
+        if not isinstance(resp, dict):
+            return None
+        if resp.get("type", query_type.removeprefix("GET_")) != query_type.removeprefix(
+            "GET_"
+        ):
             return None
         return resp
 

@@ -1,0 +1,14 @@
+{
+  "type": "SKU_INFO",
+  "sku_info": {
+    "market_name": "Q105",
+    "declare_cut_area": 500,
+    "charge_current": 2,
+    "battery_capacity": 4,
+    "region": "EU",
+    "real_cut_area": 700,
+    "main_cutter_height": {
+      "step_height": 1
+    }
+  }
+}

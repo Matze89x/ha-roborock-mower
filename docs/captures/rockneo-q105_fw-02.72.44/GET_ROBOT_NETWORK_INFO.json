@@ -1,0 +1,11 @@
+{
+  "type": "ROBOT_NETWORK_INFO",
+  "network": {
+    "mac": "**REDACTED**",
+    "ip": "**REDACTED**",
+    "ssid": "**REDACTED**",
+    "bssid": "**REDACTED**",
+    "rssi": -61,
+    "wifi_band": "2.4G"
+  }
+}

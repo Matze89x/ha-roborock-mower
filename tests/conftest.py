@@ -121,7 +121,7 @@ def make_home_data(
         products.append(
             {
                 "id": "prod_mower",
-                "name": "RockNeo Q105",
+                "name": "RockNeo Q1",  # the cloud names the family; GET_FEATURE_INFO the model
                 "model": "roborock.mower.a222",
                 "category": "roborock.mower",
                 "schema": Q105_SCHEMA,

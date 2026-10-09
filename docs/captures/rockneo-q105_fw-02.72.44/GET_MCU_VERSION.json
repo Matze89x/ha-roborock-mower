@@ -1,0 +1,84 @@
+{
+  "type": "MCU_VERSION",
+  "mcu_version": {
+    "project": "BUTCHART",
+    "mcu_versions": [
+      {
+        "mcu_type": "MAIN_MCU",
+        "version": "RR_BUTCHART.A3.G1_M6.0.0_RELEASE_20260917-120230"
+      },
+      {
+        "mcu_type": "REAR_DRV_MCU",
+        "version": "7000"
+      },
+      {
+        "mcu_type": "BORDER_DRV_MCU",
+        "version": "5375"
+      },
+      {
+        "mcu_type": "MOVE_STATION_MCU",
+        "version": "5691"
+      },
+      {
+        "mcu_type": "MOVE_STATION_RTK",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "MOVE_STATION_LORA",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "BASE_STATION_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "BASE_STATION_RTK",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "BASE_STATION_LORA",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "FRONT_DRV_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "FRONT_STEER_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "FRONT_LEFT_DRIVE_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "FRONT_LEFT_STEER_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "FRONT_RIGHT_DRIVE_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "FRONT_RIGHT_STEER_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "REAR_LEFT_DRIVE_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "REAR_RIGHT_DRIVE_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "TRIM0_MCU",
+        "version": "unknown"
+      },
+      {
+        "mcu_type": "TRIM1_MCU",
+        "version": "unknown"
+      }
+    ]
+  }
+}

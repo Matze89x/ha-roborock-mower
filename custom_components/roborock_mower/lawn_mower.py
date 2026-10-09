@@ -59,6 +59,8 @@ class RoborockLawnMowerEntity(RoborockMowerEntity, LawnMowerEntity):
         LawnMowerEntityFeature.START_MOWING
         | LawnMowerEntityFeature.PAUSE
         | LawnMowerEntityFeature.DOCK
+        # "Stop" (end the task where the mower is): Home Assistant 2026.10+.
+        | getattr(LawnMowerEntityFeature, "STOP", LawnMowerEntityFeature(0))
     )
 
     def __init__(self, coordinator: RoborockMowerCoordinator) -> None:
@@ -97,3 +99,6 @@ class RoborockLawnMowerEntity(RoborockMowerEntity, LawnMowerEntity):
 
     async def async_dock(self) -> None:
         await self._async_send("Return to dock", self.coordinator.mower_api.dock)
+
+    async def async_stop(self) -> None:
+        await self._async_send("Stop", self.coordinator.mower_api.stop)

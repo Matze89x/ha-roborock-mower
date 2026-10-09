@@ -1,0 +1,6 @@
+{
+  "type": "DOCK_PAIRED_STATUS",
+  "wifi_dock_info": {
+    "type": "PAIRED_STATUS"
+  }
+}

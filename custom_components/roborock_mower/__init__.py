@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import logging
+from pathlib import Path
 from collections.abc import Callable
 from typing import Any
 
@@ -29,16 +32,19 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_AREA_IDS,
     ATTR_AREA_NAMES,
+    ATTR_CONTAINS,
     ATTR_DEVICE_ID,
     ATTR_FROM_APP,
     ATTR_MAP_NAME,
     ATTR_PAYLOAD,
     ATTR_QUERY_TYPE,
     ATTR_QUERY_TYPES,
+    ATTR_WAIT,
     CONF_BASE_URL,
     CONF_USER_DATA,
     DOMAIN,
@@ -47,8 +53,10 @@ from .const import (
     SERVICE_MOW_AREAS,
     SERVICE_QUERY,
     SERVICE_SCAN_QUERIES,
+    SERVICE_APP_STRINGS,
+    SERVICE_SAVE_MAP_DATA,
 )
-from .app_plugin import async_find_query_names
+from .app_plugin import async_find_query_names, async_find_strings
 from .coordinator import MowerConfigEntry, MowerRuntimeData, RoborockMowerCoordinator
 from .home_data import SOURCE_CLOUD, HomeDataProvider
 from .mower_api import (
@@ -138,6 +146,27 @@ SCAN_QUERY_CANDIDATES = (
 SCAN_QUERY_TIMEOUT = 6
 SCAN_QUERY_LIMIT = 300
 
+_APP_STRINGS_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Required(ATTR_CONTAINS): vol.All(
+            cv.ensure_list, [vol.All(cv.string, vol.Length(min=3))]
+        ),
+    }
+)
+
+_SAVE_MAP_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_WAIT, default=20): vol.All(
+            vol.Coerce(int), vol.Range(min=5, max=300)
+        ),
+    }
+)
+# Asked at the start of save_map_data; the map itself may arrive as separate
+# messages, which the capture keeps.
+MAP_DATA_QUERIES = ("GET_MAP_MOW_SNAPSHOT", "GET_MAP_DIFFS", "GET_MAP_ABSTRACTS")
+
 _LIST_AREAS_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
@@ -159,6 +188,7 @@ def _make_push_handler(
 
     def _handle(message: Any) -> None:
         protocol = getattr(message, "protocol", None)
+        mower_api.note_frame(protocol, getattr(message, "payload", None))
         if mower_api.note_message(protocol) and protocol not in _KEEPALIVE_PROTOCOLS:
             payload = getattr(message, "payload", None) or b""
             _LOGGER.debug(
@@ -197,6 +227,7 @@ async def _app_query_names(
 async def _scan(coordinator: RoborockMowerCoordinator, names: list[str]) -> dict[str, Any]:
     """Ask the mower each query, one at a time (it is a small device)."""
     answered: dict[str, Any] = {}
+    acknowledged: list[str] = []
     rejected: list[str] = []
     failed: dict[str, str] = {}
     for name in names:
@@ -210,13 +241,79 @@ async def _scan(coordinator: RoborockMowerCoordinator, names: list[str]) -> dict
         except RoborockException as err:
             failed[name] = str(err)[:200]
         else:
-            answered[name] = shorten_long_strings(redact_private(answer))
+            if answer in (["ok"], "ok"):
+                acknowledged.append(name)  # accepted, but no data in the answer
+            else:
+                answered[name] = shorten_long_strings(redact_private(answer))
     return {
         "tried": len(names),
         "answered": answered,
+        "acknowledged": acknowledged,
         "rejected": rejected,
         "failed": failed,
     }
+
+
+async def _capture_map_data(
+    hass: HomeAssistant, coordinator: RoborockMowerCoordinator, wait: int
+) -> dict[str, Any]:
+    """Keep every message for ``wait`` seconds after asking for the map; save it.
+
+    Files go to ``<config>/roborock_mower/map_<time>/``: the raw messages
+    (``NNN_p<protocol>.bin``) and the query answers. Raw map messages can't be
+    cleaned of private data -- share them privately, not publicly.
+    """
+    api = coordinator.mower_api
+    api.start_capture()
+    answers: dict[str, Any] = {}
+    try:
+        for name in MAP_DATA_QUERIES:
+            try:
+                async with asyncio.timeout(SCAN_QUERY_TIMEOUT):
+                    answers[name] = redact_private(await api.query(name))
+            except (TimeoutError, RoborockException) as err:
+                answers[name] = {"error": str(err)[:200] or type(err).__name__}
+        try:
+            async with asyncio.timeout(SCAN_QUERY_TIMEOUT * 2):
+                answers["GET_FULL_MAP"] = redact_private(await api.get_map_raw())
+        except TimeoutError:
+            answers["GET_FULL_MAP"] = {"error": "no answer"}
+        await asyncio.sleep(wait)
+    finally:
+        frames = api.stop_capture()
+    folder = Path(hass.config.path(DOMAIN, f"map_{dt_util.now():%Y%m%d_%H%M%S}"))
+    files = await hass.async_add_executor_job(_write_map_data, folder, frames, answers)
+    return {
+        "folder": str(folder),
+        "messages": len(frames),
+        "files": files,
+        "note": "Raw map data may show your garden; share it privately.",
+    }
+
+
+def _write_map_data(
+    folder: Path, frames: list[tuple[str, int, bytes]], answers: dict[str, Any]
+) -> list[dict[str, Any]]:
+    folder.mkdir(parents=True, exist_ok=True)
+    files: list[dict[str, Any]] = []
+    for index, (received, protocol, payload) in enumerate(frames):
+        name = f"{index:03d}_p{protocol}.bin"
+        (folder / name).write_bytes(payload)
+        files.append(
+            {"file": name, "protocol": protocol, "bytes": len(payload), "time": received}
+        )
+    for query, answer in answers.items():
+        if isinstance(answer, str):
+            try:
+                data = base64.b64decode(answer, validate=True)
+                name = f"{query}.bin"
+            except ValueError:
+                data, name = answer.encode(), f"{query}.txt"
+        else:
+            data, name = json.dumps(answer, indent=2).encode(), f"{query}.json"
+        (folder / name).write_bytes(data)
+        files.append({"file": name, "bytes": len(data)})
+    return files
 
 
 def _mower_devices(home_data: HomeData) -> list[tuple[Any, Any]]:
@@ -327,6 +424,46 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_QUERY,
         _query,
         schema=_QUERY_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    async def _app_strings(call: ServiceCall) -> ServiceResponse:
+        result: dict[str, Any] = {}
+        for device_id in call.data[ATTR_DEVICE_ID]:
+            for coordinator in _coordinators_for_device(hass, device_id):
+                runtime = coordinator.config_entry.runtime_data
+                if runtime.api_client is None or runtime.user_data is None:
+                    raise HomeAssistantError("No Roborock account data")
+                found, errors = await async_find_strings(
+                    hass,
+                    runtime.api_client,
+                    runtime.user_data,
+                    coordinator.product,
+                    call.data[ATTR_CONTAINS],
+                )
+                result[coordinator.device.duid] = {"strings": found, "errors": errors}
+        return result
+
+    async def _save_map_data(call: ServiceCall) -> ServiceResponse:
+        result: dict[str, Any] = {}
+        for device_id in call.data[ATTR_DEVICE_ID]:
+            for coordinator in _coordinators_for_device(hass, device_id):
+                result[coordinator.device.duid] = await _capture_map_data(
+                    hass, coordinator, call.data[ATTR_WAIT]
+                )
+        return result
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_APP_STRINGS,
+        _app_strings,
+        schema=_APP_STRINGS_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SAVE_MAP_DATA,
+        _save_map_data,
+        schema=_SAVE_MAP_DATA_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
@@ -515,12 +652,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
 def _remove_retired_entities(hass: HomeAssistant, runtime: MowerRuntimeData) -> None:
     """Drop entities earlier versions created that no longer exist."""
     registry = er.async_get(hass)
-    for coordinator in runtime.coordinators:
+    retired = (
         # 0.1.1: the "Mow Area" select became one "mow zone" button per area.
-        if entity_id := registry.async_get_entity_id(
-            "select", DOMAIN, f"{coordinator.device.duid}_mow_area"
-        ):
-            registry.async_remove(entity_id)
+        ("select", "mow_area"),
+        # 0.3.0: read-only views of settings that now have a switch / number.
+        ("binary_sensor", "keep_edge"),
+        ("sensor", "mow_direction"),
+    )
+    for coordinator in runtime.coordinators:
+        for platform, key in retired:
+            if entity_id := registry.async_get_entity_id(
+                platform, DOMAIN, f"{coordinator.device.duid}_{key}"
+            ):
+                registry.async_remove(entity_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> bool:

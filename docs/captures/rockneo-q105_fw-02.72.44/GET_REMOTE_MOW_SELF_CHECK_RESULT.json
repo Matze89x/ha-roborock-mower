@@ -1,0 +1,6 @@
+{
+  "type": "REMOTE_MOW_SELF_CHECK_RESULT",
+  "runtime_task": "MOW",
+  "runtime_state": "REMOTE_MOWING",
+  "fsm_errors": {}
+}

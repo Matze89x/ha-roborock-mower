@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import copy
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 import json
 import logging
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -152,7 +154,92 @@ LIVE_PREFERENCE: dict[str, Any] = {
     },
 }
 
-PRIVATE_VALUES = ("1.234567", "02:00:00:00:00:0", "192.0.2.10", "Example 2,4", "EE-0001")
+# Further answers of the same Q105 (found with scan_queries from the app plugin).
+LIVE_EXTRA: dict[str, dict[str, Any]] = {
+    "USER_MODE_CONFIG": {
+        "type": "USER_MODE_CONFIG",
+        "user_mode_config": {
+            "rainfall_config": {"type": "RAIN_NO", "enable": True, "delay_time": 8},
+            "not_disturb_config": {
+                "enable": True,
+                "time": [{"start": {"hour": 20, "minute": 30}, "end": {"hour": 8}}],
+            },
+            "anti_theft_config": {
+                "enable": False,
+                "e_fence_range": 100,
+                "anti_theft_state": "CLOSED",
+            },
+            "audio_config": {},
+            "nav_common_config": {
+                "channel_vision_avoid": False,
+                "navigation_type": "MORE_COVERAGE",
+                "path_detect_avoid": True,
+                "edge_vision_avoid": False,
+                "obstacle_image_privacy": True,
+            },
+            "rtk_mode_config": "BASE_RTK",
+            "random_gngga_config": "1234567890123456789",
+        },
+    },
+    "FAULT_RECORDS": {
+        "type": "FAULT_RECORDS",
+        "fault_records": {
+            "cards": [
+                {
+                    "e_code": 16,
+                    "occur_count": 2,
+                    "items": [
+                        {"fault_time": "2026-09-30", "task_type": "RUNTIME"},
+                        {"fault_time": "2026-09-18", "task_type": "MOW"},
+                    ],
+                },
+                {
+                    "e_code": 35,
+                    "occur_count": 3,
+                    "items": [
+                        {"fault_time": "2026-10-02", "task_type": "MOW"},
+                        {"fault_time": "2026-09-23", "task_type": "MOW"},
+                        {"fault_time": "2026-09-22", "task_type": "MOW"},
+                    ],
+                },
+            ]
+        },
+    },
+    "ZONES_PLAN_INFO": {
+        "type": "ZONES_PLAN_INFO",
+        "zones_plan_info": {
+            "zones_plan_info": [
+                {"id": 2, "name": "Garten", "plan_id": [2848231976, 2204435469, 471772864]}
+            ]
+        },
+    },
+    "FEATURE_INFO": {
+        "type": "FEATURE_INFO",
+        "feature_info": {
+            "cutter_feature": {"main_cutter_radius": 0.11, "main_cutter_diameter_mm": 220},
+            "nav_feature": {"solution": "RTK_VISION"},
+            "drive_feature": {"mode": "TWO_WHEEL_DRIVE"},
+            "mobile_4g_feature": {"mode": "EXTERNAL_ESIM"},
+            "sku_info": {
+                "market_name": "Q105",
+                "declare_cut_area": 500,
+                "charge_current": 2,
+                "battery_capacity": 4,
+                "region": "EU",
+                "real_cut_area": 700,
+            },
+        },
+    },
+}
+
+PRIVATE_VALUES = (
+    "1.234567",
+    "02:00:00:00:00:0",
+    "192.0.2.10",
+    "Example 2,4",
+    "EE-0001",
+    "1234567890123456789",
+)
 
 
 def _info(now: datetime | None = None) -> RobotInfo:
@@ -162,6 +249,7 @@ def _info(now: datetime | None = None) -> RobotInfo:
         now=now or datetime(2026, 10, 9, 10, 17, tzinfo=BERLIN),
         updated=datetime(2026, 10, 9, 8, 17, tzinfo=UTC),
         local_connected=True,
+        extra=redact_private(LIVE_EXTRA),
     )
 
 
@@ -227,6 +315,11 @@ def test_small_converters() -> None:
     assert as_flag("maybe") is None
 
 
+def by_key_attrs(info: RobotInfo, key: str) -> Any:
+    desc = next(desc for desc in ROBOT_STATUS_SENSORS if desc.key == key)
+    return desc.attrs_fn(info)
+
+
 def test_sensor_values_from_the_live_status() -> None:
     info = _info()
     values = {desc.key: desc.value_fn(info) for desc in ROBOT_STATUS_SENSORS}
@@ -267,10 +360,31 @@ def test_sensor_values_from_the_live_status() -> None:
         "map_updated": datetime(2026, 10, 9, 8, 15, 21, tzinfo=UTC),
         "status_updated": datetime(2026, 10, 9, 8, 17, tzinfo=UTC),
         "mow_passes": 1,
-        "mow_direction": 90,
         "direction_mode": "auto_deflection",
         "rotation_angle": 15,
         "boundary_perception": "intelligence",
+        "plan_count": 3,
+        "last_fault": 35,
+        "last_fault_date": date(2026, 10, 2),
+        "rain_delay": 8,
+        "rain_state": "rain_no",
+        "anti_theft_range": 100,
+        "navigation_mode": "more_coverage",
+        "fault_count": 5,
+        "positioning": "rtk_vision",
+        "rated_area": 500,
+        "max_area": 700,
+        "blade_diameter": 220,
+        "battery_capacity": 4,
+    }
+    assert by_key_attrs(info, "plan_count") == {"zones": {"Garten": 3}}
+    assert by_key_attrs(info, "last_fault") == {
+        "date": "2026-10-02",
+        "task": "mow",
+        "faults": [
+            {"code": 35, "count": 3, "last": "2026-10-02", "task": "mow"},
+            {"code": 16, "count": 2, "last": "2026-09-30", "task": "runtime"},
+        ],
     }
     by_key = {desc.key: desc for desc in ROBOT_STATUS_SENSORS}
     assert by_key["next_mow"].attrs_fn(info) == {
@@ -312,8 +426,44 @@ def test_binary_sensor_values_from_the_live_status() -> None:
         "edge_cutter": True,
         "safety_lock": False,
         "map_editing": False,
-        "keep_edge": True,
+        "rain_protection": True,
+        "do_not_disturb": True,
+        "do_not_disturb_active": False,
+        "anti_theft_enabled": False,
+        "path_obstacle_detection": True,
+        "edge_camera_avoidance": False,
+        "passage_camera_avoidance": False,
+        "obstacle_photo_privacy": True,
     }
+
+
+def test_no_faults_and_no_plans_read_as_zero() -> None:
+    """Empty lists are left out of the answers."""
+    info = RobotInfo(
+        status={},
+        preference={},
+        now=dt_util.now(),
+        extra={
+            "FAULT_RECORDS": {"type": "FAULT_RECORDS", "fault_records": {}},
+            "ZONES_PLAN_INFO": {"type": "ZONES_PLAN_INFO", "zones_plan_info": {}},
+        },
+    )
+    values = {desc.key: desc.value_fn(info) for desc in ROBOT_STATUS_SENSORS}
+    assert values["fault_count"] == 0
+    assert values["plan_count"] == 0
+    assert values["last_fault"] is None
+    assert values["last_fault_date"] is None
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "active"),
+    [(20, 29, False), (20, 30, True), (23, 59, True), (0, 0, True), (7, 59, True), (8, 0, False)],
+)
+def test_do_not_disturb_window_spans_midnight(hour: int, minute: int, active: bool) -> None:
+    dnd_now = next(desc for desc in BINARY_SENSORS if desc.key == "do_not_disturb_active")
+    info = _info(datetime(2026, 10, 9, hour, minute, tzinfo=BERLIN))
+    assert dnd_now.value_fn(info) is active
+    assert dnd_now.attrs_fn(info) == {"start": "20:30", "end": "08:00"}
 
 
 def test_translations_cover_every_entity() -> None:
@@ -376,6 +526,8 @@ def _answering(calls: list[str], status: dict[str, Any] | None = None):
             raise RoborockException(
                 f"Unexpected API Result: {json.dumps(LIVE_PREFERENCE)}"
             )
+        if (extra := LIVE_EXTRA.get(params["type"].removeprefix("GET_"))) is not None:
+            raise RoborockException(f"Unexpected API Result: {json.dumps(extra)}")
         return ["ok"]
 
     return _send
@@ -434,10 +586,18 @@ async def test_status_entities_follow_the_mower(
         hass.states.get(_entity_id(hass, "binary_sensor", "last_mow_aborted")).state
         == "off"
     )
+    assert hass.states.get(_entity_id(hass, "sensor", "plan_count")).state == "3"
+    assert hass.states.get(_entity_id(hass, "sensor", "last_fault")).state == "35"
+    assert hass.states.get(_entity_id(hass, "binary_sensor", "rain_protection")).state == "on"
+    # The exact model from the mower's product details.
+    [device] = dr.async_entries_for_config_entry(
+        dr.async_get(hass), config_entry.entry_id
+    )
+    assert device.model == "RockNeo Q105"
 
     # Details are registered but disabled until the user enables them.
     registry = er.async_get(hass)
-    for platform, key in (("sensor", "lora_status"), ("binary_sensor", "keep_edge")):
+    for platform, key in (("sensor", "lora_status"), ("binary_sensor", "map_editing")):
         entry = registry.async_get(_entity_id(hass, platform, key))
         assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
         assert entry.entity_category == "diagnostic"
@@ -563,3 +723,88 @@ async def test_only_data_points_the_model_has_get_entities(
     for key in ("battery", "charge_type", "mow_state", "error_code"):
         assert registry.async_get_entity_id("sensor", DOMAIN, f"{MOWER_DUID}_{key}")
     assert registry.async_get_entity_id("number", DOMAIN, f"{MOWER_DUID}_mow_height")
+
+
+async def test_settings_can_be_changed(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """Edge cut and direction are written back as the whole preference."""
+    calls: list[str] = []
+    answer = _answering(calls)
+    sent: list[dict] = []
+
+    async def _send(method: str, params: dict) -> object:
+        if params["type"] == "SET_MOW_PREFERENCE":
+            sent.append(params["mow_preference"])
+            return ["ok"]
+        return await answer(method, params)
+
+    channel.rpc_channel.send_command.side_effect = _send
+    await _setup(hass, config_entry)
+    edge = _entity_id(hass, "switch", "edge_cut_while_mowing")
+    direction = _entity_id(hass, "number", "mow_direction_angle")
+    await _wait_until(hass, lambda: hass.states.get(edge).state == "on")
+    assert float(hass.states.get(direction).state) == 90
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": edge}, blocking=True
+    )
+    assert sent[-1] == {**LIVE_PREFERENCE["preference_config"]["global"], "keep_edge": 0}
+    assert hass.states.get(edge).state == "off"
+
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": direction, "value": 45}, blocking=True
+    )
+    assert sent[-1]["direction"] == 45
+    assert sent[-1]["direction_type"] == "AUTO_DEFLECTION"
+    assert sent[-1]["mow_times"] == 1
+
+    # The lawn mower entity can stop a task (Home Assistant 2026.10+).
+    mower = _entity_id(hass, "lawn_mower", "lawn_mower")
+    await hass.services.async_call(
+        "lawn_mower", "stop", {"entity_id": mower}, blocking=True
+    )
+    assert channel.rpc_channel.send_command.await_args.kwargs["params"]["app_button"] == "MOW_END"
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_save_map_data_writes_the_captured_messages(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel, tmp_path
+) -> None:
+    calls: list[str] = []
+    answer = _answering(calls)
+
+    async def _send(method: str, params: dict) -> object:
+        if params["type"] == "GET_MAP_MOW_SNAPSHOT":
+            # The map arrives as a separate message while the action waits.
+            channel.callback(SimpleNamespace(protocol=301, payload=b"\x08\x01map"))
+            channel.callback(SimpleNamespace(protocol=2, payload=b"ping"))
+            return ["ok"]
+        if params["type"] == "GET_FULL_MAP":
+            raise RoborockException('Unexpected API Result: "AAEC"')
+        return await answer(method, params)
+
+    channel.rpc_channel.send_command.side_effect = _send
+    hass.config.config_dir = str(tmp_path)
+    await _setup(hass, config_entry)
+    [device] = dr.async_entries_for_config_entry(dr.async_get(hass), config_entry.entry_id)
+    response = await hass.services.async_call(
+        DOMAIN,
+        "save_map_data",
+        {"device_id": device.id, "wait": 5},
+        blocking=True,
+        return_response=True,
+    )
+    result = response[MOWER_DUID]
+    assert result["messages"] == 1
+    folder = Path(result["folder"])
+    assert folder.parent == tmp_path / DOMAIN
+    assert (folder / "000_p301.bin").read_bytes() == b"\x08\x01map"
+    assert (folder / "GET_FULL_MAP.bin").read_bytes() == b"\x00\x01\x02"
+    assert json.loads((folder / "GET_MAP_DIFFS.json").read_text()) == ["ok"]
+    assert {entry["file"] for entry in result["files"]} >= {
+        "000_p301.bin",
+        "GET_FULL_MAP.bin",
+        "GET_MAP_MOW_SNAPSHOT.json",
+    }
+    assert await hass.config_entries.async_unload(config_entry.entry_id)

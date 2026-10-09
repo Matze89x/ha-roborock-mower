@@ -6,6 +6,8 @@ exactly the code that runs inside Home Assistant.
 
 import asyncio
 
+import pytest
+
 from custom_components.roborock_mower import mower_api
 from custom_components.roborock_mower.vendor.roborock.data import RoborockCategory
 from custom_components.roborock_mower.vendor.roborock.exceptions import (
@@ -264,6 +266,43 @@ def test_set_mow_eff_mode_builds_string_enum_payload() -> None:
     assert sent["mow_preference"]["effective"] == "DAILY"
     assert sent["mow_preference"]["direction"] == 5
     assert sent["mow_preference"]["mode"] == "GLOBAL"
+
+
+def test_preference_write_refuses_without_current_preference() -> None:
+    """A partial preference would reset passes, direction, edge cut ..."""
+    api = _api()
+    sent: list[dict] = []
+
+    async def _get_pref() -> None:
+        return None
+
+    async def _send(payload: dict) -> str:
+        sent.append(payload)
+        return "ok"
+
+    api._get_global_mow_preference = _get_pref  # type: ignore[method-assign]
+    api._send_remote_msg = _send  # type: ignore[method-assign]
+    with pytest.raises(RoborockException):
+        asyncio.run(api.set_mow_eff_mode(2))
+    with pytest.raises(RoborockException):
+        asyncio.run(api.set_mow_preference(keep_edge=0))
+    assert sent == []
+
+
+def test_preference_write_updates_the_known_preference() -> None:
+    api = _api()
+    api.preference_config = {"global": {"keep_edge": 1, "direction": 90}, "mode": "GLOBAL"}
+
+    async def _get_pref() -> dict:
+        return dict(api.preference_config["global"])
+
+    async def _send(payload: dict) -> list:
+        return ["ok"]
+
+    api._get_global_mow_preference = _get_pref  # type: ignore[method-assign]
+    api._send_remote_msg = _send  # type: ignore[method-assign]
+    asyncio.run(api.set_mow_preference(keep_edge=0, direction=45))
+    assert api.preference_config["global"] == {"keep_edge": 0, "direction": 45}
 
 
 class _FakeProduct:

@@ -3,6 +3,90 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.3.0 – Settings to switch, fault history, schedules, stop
+
+**Kurzfassung (Deutsch):** Einstellungen lassen sich jetzt auch ändern, nicht
+nur ablesen:
+- **Kantenschnitt beim Mähen** als Schalter
+- **Mährichtung (Winkel)** in 5°-Schritten
+- **Mäheffizienz** heißt wie in der App: Standard / Effizient, und „Feinschnitt“
+  bleibt als dritte Option, die die App beim Q105 nicht anbietet
+
+Geschrieben wird immer die ganze Mäheinstellung. Kann sie nicht gelesen
+werden, wird nichts geändert, damit nichts anderes zurückgesetzt wird. Die
+Rasenmäher-Entität kann jetzt auch **Stopp** (Home Assistant 2026.10).
+
+Zwei neue Werkzeuge:
+- **App-Texte suchen:** findet z. B. die genauen Namen der Richtungsmodi
+  „Optimal“ und „Benutzerdefiniert“.
+- **Kartendaten speichern:** zeichnet die Kartendaten des Mähers als Dateien
+  auf, um das Kartenformat zu entschlüsseln.
+
+Mit den Abfragenamen aus der Roborock-App hat der Mäher 37 Abfragen
+beantwortet. Daraus kommen jetzt:
+- **letzter Fehler:** Code und Datum aus dem Fehlerverlauf
+- **Regenschutz** und **Wartezeit nach Regen**
+- **Nicht stören** mit Zeitfenster, dazu ein Sensor, ob die Nicht-stören-Zeit
+  gerade läuft
+- **Diebstahlschutz** (an/aus)
+- **Anzahl der Mähpläne**
+
+Viele Details sind ebenfalls dabei, standardmäßig deaktiviert: Regenstatus,
+Diebstahlschutz-Radius, Navigationsmodus, Kamera-Optionen, gespeicherte Fehler,
+Ortung, empfohlene und maximale Fläche, Messerscheibe, Akkukapazität. Das Gerät
+zeigt jetzt das genaue Modell (z. B. „RockNeo Q105“ statt „RockNeo Q1“). Die
+Suche nach Abfragenamen liest die App jetzt exakt aus. Bisher waren dabei
+manche Namen mit ihren Nachbarn verklebt (z. B. `GET_FEATURESET_NEW_PIN_CODE`).
+SIM- und Modemkennungen sowie der RTK-Positionswert werden zusätzlich
+geschwärzt.
+
+### New
+
+- **Controls** (configuration entities, written with `SET_MOW_PREFERENCE`):
+  switch "Edge cut while mowing" (`keep_edge`), number "Mowing direction
+  (angle)" (`direction`, 0–180° in 5° steps). The mowing efficiency select is
+  named like in the app ("Standard", "Efficient") and keeps "Manicure (not in
+  the app)". After a change the settings are read again.
+- **Lawn mower "stop"** (`lawn_mower.stop`, Home Assistant 2026.10+): ends
+  the task where the mower is.
+- **Action `app_strings`:** returns the texts of the official app plugin
+  that contain given words (e.g. `DEFLECTION`), to find exact setting values.
+- **Action `save_map_data`:** asks the mower for its map, records every
+  message it sends for a given time and saves them in
+  `<config>/roborock_mower/map_<time>/` – the first step towards showing the
+  map.
+- Settings from `GET_USER_MODE_CONFIG`, fault history from
+  `GET_FAULT_RECORDS`, schedules per zone from `GET_ZONES_PLAN_INFO`, read
+  together with the mowing preferences (every 30 minutes, after a settings
+  change or a new error); product details from `GET_FEATURE_INFO` once.
+- Sensors: mowing schedules (count, zones as attribute); diagnostic: last
+  fault (code; date, task and the whole history as attributes), last fault
+  date, wait after rain; disabled: rain status, anti-theft radius, navigation
+  mode, stored faults, positioning, rated / maximum lawn area, blade disc
+  diameter, battery capacity.
+- Binary sensors (diagnostic): rain protection, do not disturb (start / end
+  as attributes), do-not-disturb time now, anti-theft enabled; disabled:
+  obstacle detection on paths, camera avoidance at the edge / in passages,
+  obstacle photo privacy.
+- The device model is the exact one from the mower (`sku_info.market_name`).
+- `scan_queries`: names come from the Hermes string table of the app plugin
+  (exact, also for overlapping strings), with the old split as fallback;
+  answers that are just `["ok"]` are listed under `acknowledged`.
+- Diagnostics probe the new queries too. More captures in `docs/`.
+
+### Changes
+
+- Preference writes (efficiency, cutting height, edge cut, direction) always
+  send the whole current preference and are refused when it can't be read;
+  before, a failed read sent a partial one, which could reset other settings.
+- The read-only "keep edge" binary sensor and "mowing direction" sensor are
+  replaced by the switch and number and removed.
+
+### Fixes
+
+- Redact SIM / modem identifiers (`iccid`, `imei`, `imsi`, `eid`, `msisdn`),
+  `ip_addr`, serial numbers and `random_gngga_config` in every answer.
+
 ## 0.2.1 – Real query names, hardware errors, open data
 
 **Kurzfassung (Deutsch):** Die Aktion „Mäher-Abfragen durchsuchen“ rät nicht

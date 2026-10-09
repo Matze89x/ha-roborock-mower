@@ -1,0 +1,32 @@
+{
+  "type": "FEATURE_INFO",
+  "feature_info": {
+    "cutter_feature": {
+      "main_cutter_radius": 0.11,
+      "main_cutter_lowest_center_pos": {
+        "x": 0.147
+      },
+      "main_cutter_diameter_mm": 220
+    },
+    "nav_feature": {
+      "solution": "RTK_VISION"
+    },
+    "drive_feature": {
+      "mode": "TWO_WHEEL_DRIVE"
+    },
+    "mobile_4g_feature": {
+      "mode": "EXTERNAL_ESIM"
+    },
+    "sku_info": {
+      "market_name": "Q105",
+      "declare_cut_area": 500,
+      "charge_current": 2,
+      "battery_capacity": 4,
+      "region": "EU",
+      "real_cut_area": 700,
+      "main_cutter_height": {
+        "step_height": 1
+      }
+    }
+  }
+}

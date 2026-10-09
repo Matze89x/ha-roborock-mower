@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import date
 import logging
 from typing import Any
 
@@ -26,6 +27,7 @@ from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
     UnitOfArea,
+    UnitOfLength,
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
@@ -298,6 +300,107 @@ def _hardware_error_attrs(info: RobotInfo) -> dict[str, Any] | None:
     return None if errors is None else {"errors": errors}
 
 
+def _extra_number(kind: str, *path: str | int) -> Callable[[RobotInfo], Any]:
+    """A number of a further answer (``USER_MODE_CONFIG`` ...)."""
+    return lambda info: as_number(dig(info.extra.get(kind), *path))
+
+
+def _extra_state(kind: str, *path: str | int) -> Callable[[RobotInfo], str | None]:
+    return lambda info: enum_key(dig(info.extra.get(kind), *path))
+
+
+def _faults(info: RobotInfo) -> list[dict[str, Any]] | None:
+    """The fault history (``GET_FAULT_RECORDS``), latest fault first.
+
+    An empty history is left out of the answer, so a known answer without
+    ``cards`` means "no faults".
+    """
+    answer = info.extra.get("FAULT_RECORDS")
+    if not isinstance(answer, dict):
+        return None
+    cards = dig(answer, "fault_records", "cards") or []
+    if not isinstance(cards, list):
+        return None
+    faults = []
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        items = [item for item in card.get("items") or [] if isinstance(item, dict)]
+        dates = sorted(str(item.get("fault_time")) for item in items if item.get("fault_time"))
+        latest = next(
+            (item for item in items if str(item.get("fault_time")) == (dates[-1] if dates else None)),
+            {},
+        )
+        faults.append(
+            {
+                "code": card.get("e_code"),
+                "count": card.get("occur_count", len(items)),
+                "last": dates[-1] if dates else None,
+                "task": enum_key(latest.get("task_type")),
+            }
+        )
+    faults.sort(key=lambda fault: fault["last"] or "", reverse=True)
+    return faults
+
+
+def _last_fault(info: RobotInfo) -> Any:
+    faults = _faults(info)
+    return faults[0]["code"] if faults else None
+
+
+def _last_fault_attrs(info: RobotInfo) -> dict[str, Any] | None:
+    faults = _faults(info)
+    if not faults:
+        return None
+    return {"date": faults[0]["last"], "task": faults[0]["task"], "faults": faults}
+
+
+def _last_fault_date(info: RobotInfo) -> date | None:
+    faults = _faults(info)
+    if not faults or not faults[0]["last"]:
+        return None
+    try:
+        return date.fromisoformat(faults[0]["last"])
+    except ValueError:
+        return None
+
+
+def _fault_count(info: RobotInfo) -> int | None:
+    faults = _faults(info)
+    if faults is None:
+        return None
+    return sum(int(fault["count"] or 0) for fault in faults)
+
+
+def _zone_plans(info: RobotInfo) -> list[dict[str, Any]] | None:
+    answer = info.extra.get("ZONES_PLAN_INFO")
+    if not isinstance(answer, dict):
+        return None
+    zones = dig(answer, "zones_plan_info", "zones_plan_info") or []
+    if not isinstance(zones, list):
+        return None
+    return [zone for zone in zones if isinstance(zone, dict)]
+
+
+def _plan_count(info: RobotInfo) -> int | None:
+    zones = _zone_plans(info)
+    if zones is None:
+        return None
+    return len({plan for zone in zones for plan in zone.get("plan_id") or []})
+
+
+def _plan_attrs(info: RobotInfo) -> dict[str, Any] | None:
+    zones = _zone_plans(info)
+    if zones is None:
+        return None
+    return {
+        "zones": {
+            str(zone.get("name") or zone.get("id")): len(zone.get("plan_id") or [])
+            for zone in zones
+        }
+    }
+
+
 def _map_name(info: RobotInfo) -> str | None:
     name = dig(info.status, "map_abstracts", 0, "name") or dig(
         info.status, "map_names", 0
@@ -337,6 +440,13 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         icon="mdi:calendar-clock",
         value_fn=_next_mow,
         attrs_fn=_next_mow_attrs,
+    ),
+    RobotStatusSensorDescription(
+        key="plan_count",
+        translation_key="plan_count",
+        icon="mdi:calendar-multiple",
+        value_fn=_plan_count,
+        attrs_fn=_plan_attrs,
     ),
     RobotStatusSensorDescription(
         key="last_mow_start",
@@ -435,6 +545,31 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         icon="mdi:alert-circle-outline",
         value_fn=_hardware_error,
         attrs_fn=_hardware_error_attrs,
+    ),
+    RobotStatusSensorDescription(
+        key="last_fault",
+        translation_key="last_fault",
+        entity_category=_DIAGNOSTIC,
+        icon="mdi:alert-octagon-outline",
+        value_fn=_last_fault,
+        attrs_fn=_last_fault_attrs,
+    ),
+    RobotStatusSensorDescription(
+        key="last_fault_date",
+        translation_key="last_fault_date",
+        device_class=SensorDeviceClass.DATE,
+        entity_category=_DIAGNOSTIC,
+        icon="mdi:calendar-alert",
+        value_fn=_last_fault_date,
+    ),
+    RobotStatusSensorDescription(
+        key="rain_delay",
+        translation_key="rain_delay",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        entity_category=_DIAGNOSTIC,
+        icon="mdi:weather-rainy",
+        value_fn=_extra_number("USER_MODE_CONFIG", "user_mode_config", "rainfall_config", "delay_time"),
     ),
     # -- diagnostic, disabled by default ----------------------------------------
     RobotStatusSensorDescription(
@@ -569,13 +704,6 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         value_fn=_preference_number("mow_times"),
     ),
     RobotStatusSensorDescription(
-        key="mow_direction",
-        translation_key="mow_direction",
-        native_unit_of_measurement=DEGREE,
-        icon="mdi:compass-outline",
-        value_fn=_preference_number("direction"),
-    ),
-    RobotStatusSensorDescription(
         key="direction_mode",
         translation_key="direction_mode",
         icon="mdi:arrow-decision-outline",
@@ -594,9 +722,79 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         icon="mdi:border-outside",
         value_fn=_preference_state("boundary_perception"),
     ),
+    # -- settings, fault history and product details ------------------------------
+    RobotStatusSensorDescription(
+        key="rain_state",
+        translation_key="rain_state",
+        icon="mdi:weather-pouring",
+        value_fn=_extra_state("USER_MODE_CONFIG", "user_mode_config", "rainfall_config", "type"),
+    ),
+    RobotStatusSensorDescription(
+        key="anti_theft_range",
+        translation_key="anti_theft_range",
+        device_class=SensorDeviceClass.DISTANCE,
+        native_unit_of_measurement=UnitOfLength.METERS,
+        icon="mdi:map-marker-radius",
+        value_fn=_extra_number(
+            "USER_MODE_CONFIG", "user_mode_config", "anti_theft_config", "e_fence_range"
+        ),
+    ),
+    RobotStatusSensorDescription(
+        key="navigation_mode",
+        translation_key="navigation_mode",
+        icon="mdi:map-marker-path",
+        value_fn=_extra_state(
+            "USER_MODE_CONFIG", "user_mode_config", "nav_common_config", "navigation_type"
+        ),
+    ),
+    RobotStatusSensorDescription(
+        key="fault_count",
+        translation_key="fault_count",
+        icon="mdi:counter",
+        value_fn=_fault_count,
+    ),
+    RobotStatusSensorDescription(
+        key="positioning",
+        translation_key="positioning",
+        icon="mdi:crosshairs",
+        value_fn=_extra_state("FEATURE_INFO", "feature_info", "nav_feature", "solution"),
+    ),
+    RobotStatusSensorDescription(
+        key="rated_area",
+        translation_key="rated_area",
+        device_class=SensorDeviceClass.AREA,
+        native_unit_of_measurement=UnitOfArea.SQUARE_METERS,
+        icon="mdi:texture-box",
+        value_fn=_extra_number("FEATURE_INFO", "feature_info", "sku_info", "declare_cut_area"),
+    ),
+    RobotStatusSensorDescription(
+        key="max_area",
+        translation_key="max_area",
+        device_class=SensorDeviceClass.AREA,
+        native_unit_of_measurement=UnitOfArea.SQUARE_METERS,
+        icon="mdi:texture-box",
+        value_fn=_extra_number("FEATURE_INFO", "feature_info", "sku_info", "real_cut_area"),
+    ),
+    RobotStatusSensorDescription(
+        key="blade_diameter",
+        translation_key="blade_diameter",
+        device_class=SensorDeviceClass.DISTANCE,
+        native_unit_of_measurement=UnitOfLength.MILLIMETERS,
+        icon="mdi:saw-blade",
+        value_fn=_extra_number(
+            "FEATURE_INFO", "feature_info", "cutter_feature", "main_cutter_diameter_mm"
+        ),
+    ),
+    RobotStatusSensorDescription(
+        key="battery_capacity",
+        translation_key="battery_capacity",
+        native_unit_of_measurement="Ah",
+        icon="mdi:battery-high",
+        value_fn=_extra_number("FEATURE_INFO", "feature_info", "sku_info", "battery_capacity"),
+    ),
 ]
 
-# Everything after rtk_position is detail: diagnostic and disabled by default.
+# Everything from wifi_quality on is detail: diagnostic and disabled by default.
 _FIRST_HIDDEN = next(
     i for i, desc in enumerate(ROBOT_STATUS_SENSORS) if desc.key == "wifi_quality"
 )

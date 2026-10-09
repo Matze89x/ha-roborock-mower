@@ -1,0 +1,25 @@
+{
+  "type": "BIT_CHECK_LISTS",
+  "bit_check_lists": [
+    "IMU",
+    "RTK",
+    "BLUETOOTH",
+    "MOBILE_4G",
+    "WIFI",
+    "RUN_WHEEL",
+    "BINOCULAR_CAMERA",
+    "DOCK_WIFI",
+    "CAMERA_LED",
+    "MAIN_CUTTER",
+    "EDGE_CUTTER",
+    "BATTERY",
+    "LED_SCREEN",
+    "STOP_BUTTON",
+    "CHARGE",
+    "LIFT",
+    "ROBOT_KEY",
+    "LEFT_BUMPER",
+    "RIGHT_BUMPER",
+    "RAIN_SENSOR"
+  ]
+}

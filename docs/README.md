@@ -26,7 +26,12 @@ Each folder holds:
 | `GET_ROBOT_STATUS.json` | full status: last mow, next schedule, lawn area, Wi-Fi/4G/RTK/LoRa, state machines |
 | `GET_ROBOT_INFO.json` | the same structure without network details; here with a controller error (`hardware.mcu_error`) |
 | `GET_MOW_PREFERENCE_CONFIG.json` | mowing preferences (global + per zone): passes, direction, efficiency, edge |
+| `GET_USER_MODE_CONFIG.json` | settings: rain protection and delay, do-not-disturb time, anti-theft, navigation options |
+| `GET_FAULT_RECORDS.json` | fault history: error code, count, dates and task |
+| `GET_ZONES_PLAN_INFO.json` | schedule ids per zone |
+| `GET_FEATURE_INFO.json`, `GET_SKU_INFO.json`, `GET_MCU_VERSION.json` | model, rated / maximum area, battery, blade disc, positioning, controller firmware |
 | `GET_MAP_NAMES.json`, `GET_HEIGHT_MOTOR_PARAMETER.json` | saved maps; cutting-height motor (empty on the Q105) |
+| other `GET_*.json` | everything else the mower answered (dock pairing, eSIM, self checks, …) |
 | `data_points.json` | the product schema (data points 101–206, Chinese names translated) and their values when docked |
 | `query_scan.json` | which `GET_*` request names the mower accepts and which it rejects |
 

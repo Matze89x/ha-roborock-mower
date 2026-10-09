@@ -1,0 +1,70 @@
+{
+  "type": "USER_MODE_CONFIG",
+  "user_mode_config": {
+    "rainfall_config": {
+      "type": "RAIN_NO",
+      "enable": true,
+      "delay_time": 8
+    },
+    "not_disturb_config": {
+      "enable": true,
+      "time": [
+        {
+          "start": {
+            "hour": 20,
+            "minute": 30
+          },
+          "end": {
+            "hour": 8
+          }
+        }
+      ]
+    },
+    "anti_theft_config": {
+      "enable": false,
+      "e_fence_range": 100,
+      "anti_theft_state": "CLOSED"
+    },
+    "audio_config": {},
+    "network_mode": {
+      "valid": false,
+      "type": "DEFAULT",
+      "active_status": "UNKNOWN",
+      "mobile_operator": "unknown",
+      "sim_type": "ESIM"
+    },
+    "nav_common_config": {
+      "channel_vision_avoid": false,
+      "navigation_type": "MORE_COVERAGE",
+      "path_detect_avoid": true,
+      "edge_vision_avoid": false,
+      "obstacle_image_privacy": true
+    },
+    "installation_wizard": {
+      "pincode": {
+        "type": "PINCODE",
+        "result": true
+      },
+      "siting_install": {
+        "type": "SITING_INSTALL",
+        "result": true
+      },
+      "signal_check": {
+        "type": "SIGNAL_CHECK",
+        "result": true
+      },
+      "activation_4g": {
+        "type": "ACTIVATION_4G",
+        "result": true
+      }
+    },
+    "remote_mow_config": {
+      "cutter_config": {
+        "main_cutter": 1,
+        "edge_cutter": 1
+      }
+    },
+    "rtk_mode_config": "BASE_RTK",
+    "random_gngga_config": "**REDACTED**"
+  }
+}

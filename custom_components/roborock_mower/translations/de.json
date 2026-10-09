@@ -72,8 +72,29 @@
       "map_editing": {
         "name": "Karte wird bearbeitet"
       },
-      "keep_edge": {
-        "name": "Am Rand entlang mähen"
+      "rain_protection": {
+        "name": "Regenschutz"
+      },
+      "do_not_disturb": {
+        "name": "Nicht stören"
+      },
+      "do_not_disturb_active": {
+        "name": "Nicht-stören-Zeit läuft"
+      },
+      "anti_theft_enabled": {
+        "name": "Diebstahlschutz eingeschaltet"
+      },
+      "path_obstacle_detection": {
+        "name": "Hinderniserkennung auf Wegen"
+      },
+      "edge_camera_avoidance": {
+        "name": "Kamera-Ausweichen am Rand"
+      },
+      "passage_camera_avoidance": {
+        "name": "Kamera-Ausweichen in Durchgängen"
+      },
+      "obstacle_photo_privacy": {
+        "name": "Datenschutz für Hindernisfotos"
       }
     },
     "sensor": {
@@ -396,13 +417,10 @@
       "mow_passes": {
         "name": "Mähdurchgänge"
       },
-      "mow_direction": {
-        "name": "Mährichtung"
-      },
       "direction_mode": {
         "name": "Richtungsmodus",
         "state": {
-          "auto_deflection": "Automatisch drehen",
+          "auto_deflection": "Auto",
           "fixed": "Fest"
         }
       },
@@ -414,20 +432,71 @@
         "state": {
           "intelligence": "Intelligent"
         }
+      },
+      "plan_count": {
+        "name": "Mähpläne"
+      },
+      "last_fault": {
+        "name": "Letzter Fehler (Code)"
+      },
+      "last_fault_date": {
+        "name": "Letzter Fehler am"
+      },
+      "rain_delay": {
+        "name": "Wartezeit nach Regen"
+      },
+      "rain_state": {
+        "name": "Regenstatus",
+        "state": {
+          "rain_no": "Kein Regen"
+        }
+      },
+      "anti_theft_range": {
+        "name": "Diebstahlschutz: Radius"
+      },
+      "navigation_mode": {
+        "name": "Navigationsmodus",
+        "state": {
+          "more_coverage": "Mehr Abdeckung"
+        }
+      },
+      "fault_count": {
+        "name": "Gespeicherte Fehler"
+      },
+      "positioning": {
+        "name": "Ortung",
+        "state": {
+          "rtk_vision": "RTK + Kamera"
+        }
+      },
+      "rated_area": {
+        "name": "Empfohlene Rasenfläche"
+      },
+      "max_area": {
+        "name": "Maximale Rasenfläche"
+      },
+      "blade_diameter": {
+        "name": "Durchmesser Messerscheibe"
+      },
+      "battery_capacity": {
+        "name": "Akkukapazität"
       }
     },
     "number": {
       "mow_height": {
         "name": "Schnitthöhe"
+      },
+      "mow_direction": {
+        "name": "Mährichtung (Winkel)"
       }
     },
     "select": {
       "mow_eff_mode": {
-        "name": "Effizienzmodus",
+        "name": "Mäheffizienz",
         "state": {
-          "daily": "Täglich",
+          "daily": "Standard",
           "efficient": "Effizient",
-          "manicure": "Feinschnitt"
+          "manicure": "Feinschnitt (nicht in der App)"
         }
       }
     },
@@ -443,6 +512,11 @@
       },
       "mow_area": {
         "name": "Zone mähen: {area}"
+      }
+    },
+    "switch": {
+      "edge_cut_while_mowing": {
+        "name": "Kantenschnitt beim Mähen"
       }
     }
   },
@@ -512,6 +586,34 @@
         "query_types": {
           "name": "Abfragen",
           "description": "Optionale Liste von Abfragenamen (jeweils mit GET_ beginnend)."
+        }
+      }
+    },
+    "app_strings": {
+      "name": "App-Texte suchen",
+      "description": "Lädt die offizielle Roborock-App-Erweiterung des Mähers (mit deinem eigenen Konto, wie die App) und gibt ihre Texte zurück, die eines der angegebenen Wörter enthalten, z. B. die genauen Namen von Einstellungswerten. Hilfsmittel, um weitere Einstellungen auswählbar zu machen.",
+      "fields": {
+        "device_id": {
+          "name": "Mähroboter",
+          "description": "Der/die Roborock-Mähroboter, deren App-Erweiterung durchsucht wird."
+        },
+        "contains": {
+          "name": "Enthält",
+          "description": "Ein oder mehrere Wörter (mindestens 3 Zeichen), Groß-/Kleinschreibung egal, z. B. DEFLECTION."
+        }
+      }
+    },
+    "save_map_data": {
+      "name": "Kartendaten speichern",
+      "description": "Fragt den Mäher nach seiner Karte und speichert alles, was er während der Wartezeit sendet, als Dateien im Ordner roborock_mower deiner Konfiguration. Dient dazu, das Kartenformat zu entschlüsseln. Rohe Kartendaten können deinen Garten zeigen: nur privat weitergeben.",
+      "fields": {
+        "device_id": {
+          "name": "Mähroboter",
+          "description": "Der/die aufzuzeichnende(n) Roborock-Mähroboter."
+        },
+        "wait": {
+          "name": "Wartezeit",
+          "description": "Wie lange nach der Anfrage aufgezeichnet wird (Sekunden). Länger beim Mähen zeigt auch den Weg."
         }
       }
     }
