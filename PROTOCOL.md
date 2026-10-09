@@ -314,3 +314,41 @@ Some names are accepted with a bare `["ok"]` (`GET_BOOT_INFO`, `GET_MAP_DIFF`,
 way. The integration reads `GET_USER_MODE_CONFIG`, `GET_FAULT_RECORDS` and
 `GET_ZONES_PLAN_INFO` together with the mowing preferences (every 30 minutes,
 after a settings change or a new error) and `GET_FEATURE_INFO` once.
+
+---
+
+## 11. The map — `get_map_diff` (read)
+
+The app's map RPC `get_map_diff` (a plain RPC method, no parameters), sent
+**through the map channel** (cloud MQTT with the security endpoint and nonce,
+like the vacuums' map), is answered with a protocol-301 message. Decrypted and
+unpacked, it holds `pb` followed by a protobuf message (1.6 kB for one zone).
+Over the local connection, and for `get_map` or the `GET_*` map queries, the
+mower only answers `["ok"]`.
+
+No schema is published; the fields below were matched against the app and the
+JSON status on a RockNeo Q105 (fw 02.72.44). Floats are 32-bit, coordinates are
+metres in the mower's own map frame (no geographic position):
+
+| field | content |
+|-------|---------|
+| 1 | `{2: id}` (a millisecond timestamp) |
+| 4 | map info: 3 height, 4 width (pixels), 5 resolution (m), 6 origin y, 7 origin x — the same as the status' `navigation.rgb_map_info` |
+| 10 | a mowing area (repeated): 1 id, 4 boundary points `{4 x, 5 y}` (repeated), 5 short name (`A1`), 7 zone `{1 id, 3 name, 4 area m², 5 time s, 6 points, 11 created}`, 8 area m², 9 time s, 12 segments `{1 index, 4 first point, 5 last point, 6 type}` (meaning open) |
+| 20 | poses `{4 x, 5 y, 6 yaw}`: 1 mower, 2 charging station |
+| 29 / 30 | lawn area (m²) / expected mowing time (s) |
+| 31 / 32 | 500.0 / 700.0 (rated / maximum area?) |
+| 33 | zone list `{1 {1 id, 2 name, 3 bytes}}` |
+| 34 | time the map file changed (`2026-10-09-12-36-43`), the same as the status' `map_abstracts[].file_change_time` |
+
+The integration reads it at start and when `map_abstracts[0].file_change_time`
+of the status changes, and draws it as SVG (`image` entity, north up).
+
+**Status stream (protocol 702).** While mowing, the mower sends its status
+every 2 seconds as a protocol-702 message: `PB` + protobuf, the same status as
+`GET_ROBOT_STATUS` with field numbers instead of names (1 time, 2 `"702"`,
+5 status). The position is at 5 → 12 (navigation) → 6 (map) → 8 (robot pose)
+`{4 x, 5 y, 6 yaw}`, the same as `navigation.map.robot_pose`. 5 → 12 → 23
+holds the **GPS position as 64-bit doubles**: the integration never reads
+64-bit values from these messages, and `save_map_data` shows every 64-bit value
+as `**REDACTED**`.

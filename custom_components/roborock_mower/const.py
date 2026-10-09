@@ -11,6 +11,7 @@ DOMAIN = "roborock_mower"
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
+    Platform.IMAGE,
     Platform.LAWN_MOWER,
     Platform.NUMBER,
     Platform.SELECT,
@@ -58,6 +59,19 @@ ROBOT_STATUS_SETTLE_DELAY = 5.0
 ROBOT_STATUS_TIMEOUT = 15.0
 # The mowing preferences (passes, direction, ...) rarely change.
 PREFERENCE_REFRESH_INTERVAL = timedelta(minutes=30)
+# The map (get_map_diff through the cloud map channel) is read at start and
+# again when the mower reports a changed map file; after a failed try, or
+# when the mower reports no map file time, at most this often.
+MAP_RETRY_INTERVAL = timedelta(minutes=30)
+MAP_TIMEOUT = 30.0
+# Live positions: while mowing the mower sends its status every 2 seconds;
+# the map picture follows at most this often (it is redrawn per view).
+MAP_IMAGE_MIN_INTERVAL = 10.0
+# The track of a run starts anew after the mower was this long without a
+# position change (a recharge in the middle of a run is shorter).
+TRACK_RESET_GAP = timedelta(hours=3)
+TRACK_MIN_STEP = 0.15  # metres
+TRACK_MAX_POINTS = 20000
 
 STORAGE_VERSION = 1
 

@@ -36,13 +36,16 @@ Was sich in welcher Version geändert hat, steht in den
   Wartezeit nach Regen, Nicht stören (und ob die Zeit gerade läuft),
   Diebstahlschutz, Anzahl der Mähpläne; das Gerät zeigt das genaue Modell (z. B.
   RockNeo Q105). Viele weitere Werte (WLAN-Qualität, RTK-Modus, LoRa, Diebstahlschutz,
-  Energie- und Systemzustände, Karte, Mäheinstellungen wie Mährichtung und
-  Durchgänge, Hinderniserkennung, Kantenschneider …) sind ebenfalls unter
+  Energie- und Systemzustände, Karte, Mäheinstellungen wie die Randerkennung,
+  Hinderniserkennung, Kantenschneider …) sind ebenfalls unter
   **Diagnose** vorhanden, aber standardmäßig deaktiviert. Der Mäher wird dafür
   selbst gefragt (lokal oder über MQTT, nicht über die begrenzte Cloud-Schnittstelle):
   jede Minute beim Mähen, sonst alle 30 Minuten und sofort nach einer Statusänderung.
+- **Karte** (Bild-Entität) – Rasenzonen mit Namen und Fläche, Ladestation, Position
+  des Mähers mit Fahrtrichtung und die Fahrspur der aktuellen bzw. letzten Mähfahrt;
+  beim Mähen alle paar Sekunden aktualisiert
 - **Einstellungen ändern** – Mäheffizienz (Standard / Effizient / Feinschnitt),
-  Kantenschnitt beim Mähen (Schalter), Richtungsmodus (Auto / Optimal /
+  Mähdurchgänge, Kantenschnitt beim Mähen (Schalter), Richtungsmodus (Auto / Optimal /
   Benutzerdefiniert), Richtungsänderung je Mähvorgang (15/30/60/90°), Winkel für
   „Benutzerdefiniert“ (5°-Schritte), Schnitthöhe (wo das Modell sie hat). Zonen,
   die in der App eigene Einstellungen haben, stehen als Attribut dabei – für sie
@@ -124,10 +127,18 @@ Daten über das Issue-Formular **„Mäher-Daten teilen“** beisteuern.
 
 ## Karte
 
-Die Rasen-/Zonenkarte wird (noch) nicht als Bild dargestellt: Die App lädt sie als
-Datei aus dem Roborock-Cloudspeicher über ihr natives SDK, das noch nicht
-nachgebaut ist. Die gespeicherten **Zonen** sind über die Tasten „Zone mähen: …“
-nutzbar. Details: [PROTOCOL.md](PROTOCOL.md) §7.
+Die Entität **Karte** (`image.<mäher>_karte`) zeigt die Karte wie die App:
+Rasenzonen mit Namen und Fläche, die Ladestation, den Mäher mit Fahrtrichtung
+und seine Fahrspur. Die Karte holt die Integration beim Start und immer dann,
+wenn der Mäher eine geänderte Karte meldet (über die Cloud, wie die App). Die
+Position kommt beim Mähen alle paar Sekunden; das Bild wird höchstens alle
+10 Sekunden neu gezeichnet. Im Dashboard z. B. mit einer **Bild**- oder
+**Bild-Entität**-Karte anzeigen. Die Fahrspur beginnt mit jeder neuen
+Mähfahrt neu und geht bei einem Neustart von Home Assistant verloren.
+
+Die Karte zeigt deinen Garten. Sie bleibt in Home Assistant; die Diagnose
+enthält nur Zonennamen und Flächen, keine Koordinaten. Aufbau der Kartendaten:
+[PROTOCOL.md](PROTOCOL.md) §11.
 
 ## Funktionsweise (kurz)
 
@@ -178,13 +189,16 @@ What changed in which version is listed in the
   wait after rain, do not disturb (and whether its time is now), anti-theft,
   number of schedules; the device shows the exact model (e.g. RockNeo Q105).
   Many more values (Wi-Fi quality, RTK mode, LoRa, anti-theft, energy and
-  system states, map, mowing preferences such as direction and passes, obstacle
+  system states, map, mowing preferences such as boundary perception, obstacle
   avoidance, edge trimmer, …) are under **Diagnostic** too, disabled by default.
   They are asked from the mower itself (locally or via MQTT, never the
   rate-limited cloud API): every minute while mowing, otherwise every 30 minutes
   and right after a state change.
-- **Change settings** – mowing efficiency (Standard / Efficient / Manicure), edge
-  cut while mowing (switch), direction mode (Auto / Optimal / Custom), direction
+- **Map** (image entity) – lawn zones with name and area, charging station, the
+  mower's position and heading, and the track of the current or last run;
+  updated every few seconds while mowing
+- **Change settings** – mowing efficiency (Standard / Efficient / Manicure),
+  mowing passes, edge cut while mowing (switch), direction mode (Auto / Optimal / Custom), direction
   change per mow (15/30/60/90°), angle for "Custom" (5° steps), cutting height
   (where the model has it). Zones with their own settings in the app are listed
   as an attribute – the global settings don't apply to them
@@ -261,10 +275,17 @@ form.
 
 ## Map
 
-The lawn/zone map is not rendered yet: the app downloads it as a file from
-Roborock's cloud storage via its native SDK, which has not been reverse-engineered.
-Saved **zones** are available through the "Mow zone: …" buttons. See
-[PROTOCOL.md](PROTOCOL.md) §7.
+The **Map** entity (`image.<mower>_map`) shows the map like the app: lawn zones
+with name and area, the charging station, the mower with its heading and its
+track. The integration reads the map at start and whenever the mower reports a
+changed map (through the cloud, like the app). While mowing the position comes
+every few seconds; the picture is redrawn at most every 10 seconds. Show it on
+a dashboard with e.g. a **Picture** or **Picture entity** card. The track starts
+anew with every run and is lost when Home Assistant restarts.
+
+The map shows your garden. It stays in Home Assistant; the diagnostics only hold
+zone names and areas, no coordinates. Map data layout:
+[PROTOCOL.md](PROTOCOL.md) §11.
 
 ## How it works (short)
 

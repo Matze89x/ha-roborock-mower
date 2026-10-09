@@ -244,10 +244,6 @@ def _time(*path: str | int) -> Callable[[RobotInfo], Any]:
     return lambda info: as_datetime(dig(info.status, *path), info.now.tzinfo)
 
 
-def _preference_number(key: str) -> Callable[[RobotInfo], float | int | None]:
-    return lambda info: as_number(info.preference.get(key))
-
-
 def _preference_state(key: str) -> Callable[[RobotInfo], str | None]:
     return lambda info: enum_key(info.preference.get(key))
 
@@ -753,12 +749,6 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         value_fn=lambda info: info.updated,
     ),
     # -- mowing preferences (set in the app) --------------------------------------
-    RobotStatusSensorDescription(
-        key="mow_passes",
-        translation_key="mow_passes",
-        icon="mdi:repeat",
-        value_fn=_preference_number("mow_times"),
-    ),
     RobotStatusSensorDescription(
         key="boundary_perception",
         translation_key="boundary_perception",

@@ -59,6 +59,7 @@ from .const import (
 from .app_plugin import async_find_query_names, async_find_strings
 from .coordinator import MowerConfigEntry, MowerRuntimeData, RoborockMowerCoordinator
 from .home_data import SOURCE_CLOUD, HomeDataProvider
+from .map_data import PROTOCOL_STATUS_STREAM, pose_from_stream, readable_frame
 from .mower_api import (
     MAP_RPC_METHODS,
     MowerApi,
@@ -70,7 +71,6 @@ from .mower_api import (
 from .robot_status import (
     FRAME_SHOW_LIMIT,
     dig,
-    frame_content,
     redact_private,
     shorten_long_strings,
 )
@@ -190,6 +190,13 @@ _KEEPALIVE_PROTOCOLS = frozenset(
 )
 
 
+def _protocol_code(protocol: Any) -> int | None:
+    try:
+        return int(protocol)
+    except (TypeError, ValueError):
+        return None
+
+
 def _make_push_handler(
     coordinator: RoborockMowerCoordinator, mower_api: MowerApi, duid: str
 ) -> Callable[[Any], None]:
@@ -198,6 +205,11 @@ def _make_push_handler(
     def _handle(message: Any) -> None:
         protocol = getattr(message, "protocol", None)
         mower_api.note_frame(protocol, getattr(message, "payload", None))
+        if _protocol_code(protocol) == PROTOCOL_STATUS_STREAM and (
+            pose := pose_from_stream(getattr(message, "payload", None))
+        ) is not None:
+            # Live position while mowing (the frame's GPS is never read).
+            coordinator.hass.loop.call_soon_threadsafe(coordinator.note_pose, pose)
         if mower_api.note_message(protocol) and protocol not in _KEEPALIVE_PROTOCOLS:
             payload = getattr(message, "payload", None) or b""
             _LOGGER.debug(
@@ -268,11 +280,12 @@ async def _capture_map_data(
 ) -> dict[str, Any]:
     """Keep every message for ``wait`` seconds after asking for the map.
 
-    The messages come back in the answer (and the diagnostics) -- JSON
-    unpacked and redacted, anything else as base64 -- and are also saved in
+    The messages come back in the answer -- JSON unpacked and redacted,
+    protobuf decoded with every 64-bit value (the GPS position) hidden,
+    anything else as base64 -- and are also saved unchanged in
     ``<config>/roborock_mower/map_<time>/`` (``NNN_p<protocol>.bin`` plus the
-    query answers). Binary map data can't be cleaned of private data: share
-    it privately, not publicly.
+    query answers). The diagnostics only list what arrived. The saved files
+    and the map show your garden: share them privately, not publicly.
     """
     api = coordinator.mower_api
     names = dig(coordinator.robot_status, "map_names") or []
@@ -296,7 +309,7 @@ async def _capture_map_data(
                 continue
             if data:
                 maps[name] = data
-                answers[name] = {"bytes": len(data)} | frame_content(data)
+                answers[name] = {"bytes": len(data)} | readable_frame(data)
             else:
                 answers[name] = {"error": "no map data in the answer"}
         # The app's map RPCs, through the map channel and the normal one.
@@ -311,7 +324,7 @@ async def _capture_map_data(
                     continue
                 if isinstance(result, bytes):
                     maps[key] = result
-                    answers[key] = {"bytes": len(result)} | frame_content(result)
+                    answers[key] = {"bytes": len(result)} | readable_frame(result)
                 else:
                     answers[key] = shorten_long_strings(
                         redact_private(result), FRAME_SHOW_LIMIT
@@ -331,7 +344,7 @@ async def _capture_map_data(
         "answers": answers,
         "messages": [
             {"time": received, "protocol": protocol, "bytes": len(payload)}
-            | frame_content(payload)
+            | readable_frame(payload)
             for received, protocol, payload in frames
         ],
     }
@@ -716,6 +729,8 @@ def _remove_retired_entities(hass: HomeAssistant, runtime: MowerRuntimeData) -> 
         # 0.3.4: direction mode and rotation angle became selects.
         ("sensor", "direction_mode"),
         ("sensor", "rotation_angle"),
+        # 0.4.0: the number of passes became a number to set.
+        ("sensor", "mow_passes"),
     )
     for coordinator in runtime.coordinators:
         for platform, key in retired:

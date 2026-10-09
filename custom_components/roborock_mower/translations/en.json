@@ -416,9 +416,6 @@
       "status_updated": {
         "name": "Status read"
       },
-      "mow_passes": {
-        "name": "Mowing passes"
-      },
       "boundary_perception": {
         "name": "Boundary detection",
         "state": {
@@ -489,6 +486,9 @@
       },
       "mow_direction": {
         "name": "Mowing direction (custom angle)"
+      },
+      "mow_passes": {
+        "name": "Mowing passes"
       }
     },
     "select": {
@@ -535,6 +535,11 @@
     "switch": {
       "edge_cut_while_mowing": {
         "name": "Edge cut while mowing"
+      }
+    },
+    "image": {
+      "map": {
+        "name": "Map"
       }
     }
   },
@@ -623,7 +628,7 @@
     },
     "save_map_data": {
       "name": "Save map data",
-      "description": "Asks the mower for its map and records everything it sends during the waiting time. The answer contains the data (JSON readable, binary as base64) so it can simply be copied; it is also in the diagnostics and saved as files in the folder roborock_mower of your configuration. Used to decode the map format. Map data can show your garden: share it privately only.",
+      "description": "Asks the mower for its map and records everything it sends during the waiting time. The answer contains the data so it can simply be copied: JSON readable, protobuf decoded with the GPS position hidden, other binary data as base64. Everything is also saved as files in the folder roborock_mower of your configuration; the diagnostics only list what arrived. Used to decode the map format. Map data can show your garden: share it privately only.",
       "fields": {
         "device_id": {
           "name": "Mower",

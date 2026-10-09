@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 import json
 import logging
 from pathlib import Path
+import struct
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,6 +23,9 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.roborock_mower.binary_sensor import BINARY_SENSORS
 from custom_components.roborock_mower.const import DOMAIN
+from custom_components.roborock_mower.diagnostics import (
+    async_get_config_entry_diagnostics,
+)
 from custom_components.roborock_mower.mower_api import MowerApi
 from custom_components.roborock_mower.robot_status import (
     REDACTED,
@@ -40,6 +44,7 @@ from custom_components.roborock_mower.vendor.roborock.exceptions import (
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from .conftest import MOWER_DUID, FakeChannel, FakeMessage
+from .protobuf import STREAM_FRAME
 
 BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -362,7 +367,6 @@ def test_sensor_values_from_the_live_status() -> None:
         "map_name": "APP_MAP1",
         "map_updated": datetime(2026, 10, 9, 8, 15, 21, tzinfo=UTC),
         "status_updated": datetime(2026, 10, 9, 8, 17, tzinfo=UTC),
-        "mow_passes": 1,
         "boundary_perception": "intelligence",
         "plan_count": 3,
         "last_fault": 35,
@@ -835,7 +839,8 @@ async def test_save_map_data_writes_the_captured_messages(
     async def _map(method: str, params: dict | None = None) -> bytes:
         # Asked through the map channel, the mower sends the map itself.
         if method == "get_map":
-            return b"PB\x01\x02"
+            # A protobuf answer with a 64-bit number (could be GPS).
+            return b"PB\x08\x01\x11" + struct.pack("<d", 49.3312)
         if params is None:
             raise RoborockException("Command timed out after 10.0s")
         if params["type"] == "GET_FULL_MAP":
@@ -845,6 +850,7 @@ async def test_save_map_data_writes_the_captured_messages(
             # Every raw message during the recording is kept (pings aside).
             channel.callback(SimpleNamespace(protocol=301, payload=b"\x08\x01map"))
             channel.callback(SimpleNamespace(protocol=2, payload=b"ping"))
+            channel.callback(SimpleNamespace(protocol=702, payload=STREAM_FRAME))
         raise RoborockException("Command timed out after 10.0s")
 
     channel.rpc_channel.send_command.side_effect = _send
@@ -862,25 +868,38 @@ async def test_save_map_data_writes_the_captured_messages(
         return_response=True,
     )
     result = response[MOWER_DUID]
-    # The data is in the answer itself: binary as base64, JSON unpacked.
-    assert result["messages"] == [
-        {
-            "time": result["messages"][0]["time"],
-            "protocol": 301,
-            "bytes": 5,
-            "base64": "CAFtYXA=",
-        }
-    ]
+    # The data is in the answer itself: binary as base64, JSON unpacked,
+    # protobuf decoded without its 64-bit numbers (the GPS position).
+    assert result["messages"][0] == {
+        "time": result["messages"][0]["time"],
+        "protocol": 301,
+        "bytes": 5,
+        "base64": "CAFtYXA=",
+    }
+    stream = result["messages"][1]
+    assert stream["protocol"] == 702
+    assert stream["protobuf"]["5"]["12"]["23"] == {"1": REDACTED, "2": REDACTED}
+    assert stream["protobuf"]["5"]["12"]["6"]["8"] == {"4": 3.5, "5": -2.25, "6": 1.5}
+    assert "49.33" not in json.dumps(result)
     assert result["map_name"] == "APP_MAP1.bin"
     assert result["answers"]["GET_FULL_MAP"] == {"bytes": 3, "base64": "AAEC"}
     assert "timed out" in result["answers"]["GET_MAP_DIFFS"]["error"]
     # The app's map RPCs: through the map channel and the normal one.
-    assert result["answers"]["get_map_map"] == {"bytes": 4, "base64": "UEIBAg=="}
+    assert result["answers"]["get_map_map"] == {
+        "bytes": 13,
+        "protobuf": {"1": 1, "2": REDACTED},
+    }
     assert result["answers"]["get_map_rpc"] == ["ok"]
     assert "timed out" in result["answers"]["get_map_diff_map"]["error"]
     folder = Path(result["folder"])
     assert folder.parent == tmp_path / DOMAIN
     assert (folder / "000_p301.bin").read_bytes() == b"\x08\x01map"
+    # The diagnostics only list what arrived.
+    diag = await async_get_config_entry_diagnostics(hass, config_entry)
+    capture = diag["mowers"][0]["map_capture"]
+    assert capture["messages_by_protocol"] == {"301": 1, "702": 1}
+    assert capture["answers"]["get_map_map"] == {"bytes": 13}
+    assert "49.33" not in json.dumps(diag, default=str)
     assert (folder / "GET_FULL_MAP_map.bin").read_bytes() == b"\x00\x01\x02"
     assert set(result["files"]) >= {
         "000_p301.bin",
