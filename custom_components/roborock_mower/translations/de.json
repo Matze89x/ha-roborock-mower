@@ -2,6 +2,21 @@
   "config": {
     "step": {
       "user": {
+        "title": "Roborock-Mähroboter einrichten",
+        "description": "Die offizielle Roborock-Integration ist bereits angemeldet. Übernimm ihre Anmeldung (kein Bestätigungscode nötig) oder melde dich mit E-Mail-Adresse und Code an.",
+        "menu_options": {
+          "official_login": "Anmeldung der Roborock-Integration übernehmen",
+          "email_login": "Mit E-Mail und Bestätigungscode anmelden"
+        }
+      },
+      "official_login": {
+        "title": "Roborock-Anmeldung übernehmen",
+        "description": "Die Mähroboter dieses Roborock-Kontos werden mit der Anmeldung der offiziellen Roborock-Integration eingerichtet. Diese läuft unverändert weiter.",
+        "data": {
+          "account": "Roborock-Konto"
+        }
+      },
+      "email_login": {
         "title": "Roborock-Mähroboter-Konto",
         "description": "Gib die E-Mail-Adresse deines Roborock-Kontos ein, um einen Bestätigungscode zu erhalten.",
         "data": {

@@ -404,7 +404,7 @@ def _bounds(view: MapView) -> tuple[float, float, float, float]:
 
 def _centroid(points: tuple[tuple[float, float], ...]) -> tuple[float, float]:
     area = cx = cy = 0.0
-    for (x1, y1), (x2, y2) in zip(points, points[1:] + points[:1]):
+    for (x1, y1), (x2, y2) in zip(points, points[1:] + points[:1], strict=True):
         cross = x1 * y2 - x2 * y1
         area += cross
         cx += (x1 + x2) * cross

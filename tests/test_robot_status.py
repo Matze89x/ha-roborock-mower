@@ -43,7 +43,7 @@ from custom_components.roborock_mower.vendor.roborock.exceptions import (
 )
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from .conftest import MOWER_DUID, FakeChannel, FakeMessage
+from .conftest import MOWER_DUID, FakeChannel, FakeMessage, enable_entities
 from .protobuf import STREAM_FRAME
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -573,7 +573,8 @@ def _answering(calls: list[str], status: dict[str, Any] | None = None):
 
 
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
-    entry.add_to_hass(hass)
+    if hass.config_entries.async_get_entry(entry.entry_id) is None:
+        entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -601,6 +602,14 @@ async def test_status_entities_follow_the_mower(
     await hass.config.async_set_time_zone("Europe/Berlin")
     calls: list[str] = []
     channel.rpc_channel.send_command.side_effect = _answering(calls)
+    enable_entities(
+        hass,
+        config_entry,
+        ("sensor", "lawn_area"),
+        ("sensor", "plan_count"),
+        ("sensor", "last_fault"),
+        ("binary_sensor", "rain_protection"),
+    )
     await _setup(hass, config_entry)
 
     lawn_area = _entity_id(hass, "sensor", "lawn_area")
@@ -660,6 +669,7 @@ async def test_state_change_push_reads_the_status_again(
     calls: list[str] = []
     mowing = copy.deepcopy(LIVE_STATUS)
     channel.rpc_channel.send_command.side_effect = _answering(calls)
+    enable_entities(hass, config_entry, ("sensor", "lawn_area"))
     with patch(
         "custom_components.roborock_mower.coordinator.ROBOT_STATUS_SETTLE_DELAY", 0
     ):
@@ -931,4 +941,46 @@ async def test_zones_with_own_settings_are_shown(
     mode = _entity_id(hass, "select", "direction_mode")
     await _wait_until(hass, lambda: hass.states.get(mode).state == "optimal")
     assert hass.states.get(mode).attributes["zones_with_own_settings"] == ["Garten"]
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_a_new_installation_is_not_flooded(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """Only what most people look at is enabled when the mower is added."""
+    channel.rpc_channel.send_command.side_effect = _answering([])
+    await _setup(hass, config_entry)
+    entries = er.async_entries_for_config_entry(er.async_get(hass), config_entry.entry_id)
+    enabled = {
+        (entry.domain, str(entry.entity_category or "-"), entry.unique_id.removeprefix(f"{MOWER_DUID}_"))
+        for entry in entries
+        if entry.disabled_by is None
+    }
+    assert enabled == {
+        ("lawn_mower", "-", "lawn_mower"),
+        ("image", "-", "map"),
+        ("sensor", "-", "battery"),
+        ("sensor", "-", "mow_state"),
+        ("sensor", "-", "mow_progress"),
+        ("sensor", "-", "remaining_mow_time"),
+        ("sensor", "-", "next_mow"),
+        ("sensor", "-", "last_mow_end"),
+        ("sensor", "-", "last_mow_duration"),
+        ("sensor", "-", "last_mow_area"),
+        ("button", "-", "edge_cut"),
+        ("button", "-", "mow_area_2"),
+        ("select", "config", "mow_eff_mode"),
+        ("select", "config", "direction_mode"),
+        ("select", "config", "rotation_angle_select"),
+        ("number", "config", "mow_height"),
+        ("number", "config", "mow_direction_angle"),
+        ("number", "config", "mow_passes"),
+        ("switch", "config", "edge_cut_while_mowing"),
+        ("sensor", "diagnostic", "error_code"),
+        ("sensor", "diagnostic", "last_mow_end_reason"),
+        ("sensor", "diagnostic", "wifi_signal"),
+        ("sensor", "diagnostic", "rtk_position"),
+        ("binary_sensor", "diagnostic", "last_mow_aborted"),
+    }
+    assert len(entries) > 2 * len(enabled)
     assert await hass.config_entries.async_unload(config_entry.entry_id)

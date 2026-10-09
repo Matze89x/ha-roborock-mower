@@ -2,8 +2,8 @@
 
 Yes/no values of the mower's full status (``GET_ROBOT_STATUS``), its mowing
 preferences and its settings (``GET_USER_MODE_CONFIG``: rain protection,
-do-not-disturb, anti-theft). All diagnostic; the details are disabled by
-default.
+do-not-disturb, anti-theft). All diagnostic; only "last mow aborted" is
+enabled by default.
 """
 
 from __future__ import annotations
@@ -80,6 +80,7 @@ BINARY_SENSORS: list[RobotStatusBinarySensorDescription] = [
         translation_key="rain_protection",
         icon="mdi:weather-rainy",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=_setting("rainfall_config", "enable"),
     ),
     RobotStatusBinarySensorDescription(
@@ -87,6 +88,7 @@ BINARY_SENSORS: list[RobotStatusBinarySensorDescription] = [
         translation_key="do_not_disturb",
         icon="mdi:minus-circle-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=_setting("not_disturb_config", "enable"),
         attrs_fn=_dnd_attrs,
     ),
@@ -95,6 +97,7 @@ BINARY_SENSORS: list[RobotStatusBinarySensorDescription] = [
         translation_key="do_not_disturb_active",
         icon="mdi:sleep",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=_dnd_now,
         attrs_fn=_dnd_attrs,
     ),
@@ -103,6 +106,7 @@ BINARY_SENSORS: list[RobotStatusBinarySensorDescription] = [
         translation_key="anti_theft_enabled",
         icon="mdi:shield-lock-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=_setting("anti_theft_config", "enable"),
     ),
     RobotStatusBinarySensorDescription(

@@ -48,7 +48,13 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from .conftest import MOWER_DUID, FakeChannel, FakeMessage, make_home_data
+from .conftest import (
+    MOWER_DUID,
+    FakeChannel,
+    FakeMessage,
+    enable_entities,
+    make_home_data,
+)
 
 MANIFEST = (
     Path(__file__).resolve().parent.parent
@@ -116,6 +122,7 @@ async def test_setup_and_unload(
     mqtt_session: MagicMock,
     home_data_mock: AsyncMock,
 ) -> None:
+    enable_entities(hass, config_entry, ("sensor", "charge_state"))
     await _setup(hass, config_entry)
 
     assert config_entry.state is ConfigEntryState.LOADED

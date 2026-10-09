@@ -2,6 +2,21 @@
   "config": {
     "step": {
       "user": {
+        "title": "Set up Roborock mowers",
+        "description": "The official Roborock integration is already logged in. Use its login (no verification code needed) or log in with your e-mail address and a code.",
+        "menu_options": {
+          "official_login": "Use the login of the Roborock integration",
+          "email_login": "Log in with e-mail and verification code"
+        }
+      },
+      "official_login": {
+        "title": "Use the Roborock login",
+        "description": "The mowers of this Roborock account are set up with the login of the official Roborock integration, which keeps working as before.",
+        "data": {
+          "account": "Roborock account"
+        }
+      },
+      "email_login": {
         "title": "Roborock Mower Account",
         "description": "Enter your Roborock account email to receive a verification code.",
         "data": {

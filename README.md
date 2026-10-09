@@ -68,10 +68,20 @@ Was sich in welcher Version geändert hat, steht in den
    `https://github.com/Matze89x/ha-roborock-mower`, Typ **Integration** → Hinzufügen.
 2. „Roborock Mower“ suchen → **Herunterladen**.
 3. Home Assistant **neu starten**.
-4. Einstellungen → Geräte & Dienste → **Integration hinzufügen** → „Roborock Mower“ →
-   E-Mail + Region → Code aus der E-Mail eingeben.
+4. Einstellungen → Geräte & Dienste → **Integration hinzufügen** → „Roborock Mower“.
+   - Ist die **offizielle Roborock-Integration** schon eingerichtet: **„Anmeldung der
+     Roborock-Integration übernehmen“** wählen – fertig, kein Code nötig. Die
+     offizielle Integration läuft unverändert weiter.
+   - Sonst (oder wahlweise): E-Mail + Region → Code aus der E-Mail eingeben. Ein
+     Passwort wird nie abgefragt.
 
 Voraussetzung: Home Assistant **2026.4** oder neuer.
+
+Nach der Einrichtung sind nur die wichtigsten Entitäten aktiv: Rasenmäher, Karte,
+Akku, Mähstatus und -fortschritt, Restzeit, nächstes und letztes Mähen, Tasten für
+Kantenschnitt und Zonen, die Mäheinstellungen und wenige Diagnosewerte (Fehler,
+WLAN, RTK). Alles Weitere ist vorhanden, aber deaktiviert: Gerät öffnen →
+„+N Entitäten nicht angezeigt“ → Entität → **Aktivieren**.
 
 ### Vom Original (christiantroldmand) auf diesen Fork wechseln
 
@@ -219,10 +229,20 @@ What changed in which version is listed in the
    type **Integration** → Add.
 2. Search "Roborock Mower" → **Download**.
 3. **Restart** Home Assistant.
-4. Settings → Devices & services → **Add integration** → "Roborock Mower" →
-   e-mail + region → enter the code from the e-mail.
+4. Settings → Devices & services → **Add integration** → "Roborock Mower".
+   - If the **official Roborock integration** is already set up: choose **"Use the
+     login of the Roborock integration"** – done, no code needed. The official
+     integration keeps working as before.
+   - Otherwise (or if you prefer): e-mail + region → enter the code from the
+     e-mail. A password is never asked for.
 
 Requires Home Assistant **2026.4** or newer.
+
+After setup only the main entities are enabled: lawn mower, map, battery, mow
+state and progress, remaining time, next and last mow, buttons for edge cut and
+zones, the mowing settings and a few diagnostic values (error, Wi-Fi, RTK).
+Everything else is there but disabled: open the device → "+N entities not
+shown" → entity → **Enable**.
 
 ### Switching from the original (christiantroldmand)
 

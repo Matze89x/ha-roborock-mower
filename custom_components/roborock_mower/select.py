@@ -48,6 +48,7 @@ class RoborockEfficiencyModeSelect(RoborockPreferenceEntity, SelectEntity):
 
     _attr_translation_key = "mow_eff_mode"
     _attr_icon = "mdi:speedometer"
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_options = list(EFF_MODE_LABELS.values())
 
     def __init__(self, coordinator: RoborockMowerCoordinator) -> None:
