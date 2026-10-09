@@ -192,6 +192,23 @@ class FakeChannel:
         return self.unsubscribe
 
 
+def enable_entities(hass: Any, entry: MockConfigEntry, *entities: tuple[str, str]) -> None:
+    """Switch on entities that are disabled by default, before setup.
+
+    ``entities`` are ``(platform, key)``, the key being the unique id after
+    the mower's duid.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    if hass.config_entries.async_get_entry(entry.entry_id) is None:
+        entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    for platform, key in entities:
+        registry.async_get_or_create(
+            platform, DOMAIN, f"{MOWER_DUID}_{key}", config_entry=entry
+        )
+
+
 class FakeMessage:
     def __init__(self, payload: bytes) -> None:
         self.payload = payload

@@ -35,6 +35,7 @@ class RoborockMowHeightNumber(RoborockMowerEntity, NumberEntity):
 
     _attr_translation_key = "mow_height"
     _attr_icon = "mdi:arrow-expand-vertical"
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_mode = NumberMode.SLIDER
     _attr_native_min_value = 20
     _attr_native_max_value = 70

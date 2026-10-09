@@ -116,6 +116,8 @@ class RoborockStopButton(RoborockMowerEntity, ButtonEntity):
 
     _attr_translation_key = "stop"
     _attr_icon = "mdi:stop"
+    # The lawn mower entity can stop too.
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: RoborockMowerCoordinator) -> None:
         super().__init__(coordinator)
@@ -130,6 +132,7 @@ class RoborockCancelDockButton(RoborockMowerEntity, ButtonEntity):
 
     _attr_translation_key = "cancel_dock"
     _attr_icon = "mdi:home-export-outline"
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: RoborockMowerCoordinator) -> None:
         super().__init__(coordinator)

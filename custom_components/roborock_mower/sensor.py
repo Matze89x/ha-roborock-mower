@@ -152,6 +152,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
         options=_options(MOW_TYPE_LABELS),
         icon="mdi:vector-square",
         value_fn=_enum("mow_type", lambda s: s.mow_type, MOW_TYPE_LABELS, 0),
+        entity_registry_enabled_default=False,
     ),
     RoborockMowerSensorDescription(
         key="charge_state",
@@ -161,6 +162,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
         options=_options(CHARGE_STATE_LABELS),
         icon="mdi:battery-charging",
         value_fn=_enum("charge_state", lambda s: s.charge_state, CHARGE_STATE_LABELS),
+        entity_registry_enabled_default=False,
     ),
     RoborockMowerSensorDescription(
         key="charge_type",
@@ -202,7 +204,6 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
         native_unit_of_measurement=PERCENTAGE,
         icon="mdi:saw-blade",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda s: s.blade_lifespan,
     ),
 ]
@@ -834,6 +835,26 @@ _FIRST_HIDDEN = next(
 ROBOT_STATUS_SENSORS[_FIRST_HIDDEN:] = [
     replace(desc, entity_category=_DIAGNOSTIC, entity_registry_enabled_default=False)
     for desc in ROBOT_STATUS_SENSORS[_FIRST_HIDDEN:]
+]
+# Enabled when the mower is added: what most people look at. Everything else
+# can be switched on per entity, so a new installation isn't flooded.
+_ENABLED_AT_START = frozenset(
+    {
+        "remaining_mow_time",
+        "next_mow",
+        "last_mow_end",
+        "last_mow_duration",
+        "last_mow_area",
+        "last_mow_end_reason",
+        "wifi_signal",
+        "rtk_position",
+    }
+)
+ROBOT_STATUS_SENSORS[:] = [
+    desc
+    if desc.key in _ENABLED_AT_START
+    else replace(desc, entity_registry_enabled_default=False)
+    for desc in ROBOT_STATUS_SENSORS
 ]
 
 

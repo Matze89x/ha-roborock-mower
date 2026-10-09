@@ -7,10 +7,16 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    SOURCE_REAUTH,
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+)
 from homeassistant.const import CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -36,6 +42,10 @@ from .vendor.roborock.web_api import RoborockApiClient
 _LOGGER = logging.getLogger(__name__)
 
 CONF_REGION = "region"
+CONF_ACCOUNT = "account"
+# The official Roborock integration of Home Assistant (vacuums). Its config
+# entries hold the same kind of login (user_data, base_url) as ours.
+OFFICIAL_DOMAIN = "roborock"
 
 
 class RoborockMowerFlowHandler(ConfigFlow, domain=DOMAIN):
@@ -48,10 +58,84 @@ class RoborockMowerFlowHandler(ConfigFlow, domain=DOMAIN):
         self._base_url: str | None = None
         self._client: RoborockApiClient | None = None
 
+    def _official_logins(self) -> list[ConfigEntry]:
+        """Logins of the official Roborock integration that can be reused.
+
+        Accounts this integration already has are left out.
+        """
+        configured = self._async_current_ids(include_ignore=False)
+        return [
+            entry
+            for entry in self.hass.config_entries.async_entries(OFFICIAL_DOMAIN)
+            if entry.data.get(CONF_USERNAME)
+            and isinstance(entry.data.get(CONF_USER_DATA), dict)
+            and entry.data[CONF_USER_DATA].get("rruid")
+            and entry.data[CONF_USER_DATA]["rruid"] not in configured
+        ]
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the initial user step (email + region)."""
+        """Start: reuse the official integration's login, or log in by e-mail."""
+        if self._official_logins():
+            return self.async_show_menu(
+                step_id="user", menu_options=["official_login", "email_login"]
+            )
+        return await self.async_step_email_login()
+
+    async def async_step_official_login(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Take over the login of the official Roborock integration.
+
+        No e-mail code needed: the same Roborock account, the same stored
+        login. The official integration keeps working as before.
+        """
+        logins = self._official_logins()
+        if not logins:
+            return await self.async_step_email_login()
+        if user_input is not None:
+            entry = next(
+                (e for e in logins if e.entry_id == user_input[CONF_ACCOUNT]), None
+            )
+            if entry is not None:
+                user_data = dict(entry.data[CONF_USER_DATA])
+                await self.async_set_unique_id(user_data["rruid"])
+                self._abort_if_unique_id_configured(
+                    error="already_configured_account"
+                )
+                return self.async_create_entry(
+                    title=entry.data[CONF_USERNAME],
+                    data={
+                        CONF_USERNAME: entry.data[CONF_USERNAME],
+                        CONF_USER_DATA: user_data,
+                        CONF_BASE_URL: entry.data.get(CONF_BASE_URL),
+                    },
+                )
+        return self.async_show_form(
+            step_id="official_login",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_ACCOUNT, default=logins[0].entry_id): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                SelectOptionDict(
+                                    value=entry.entry_id,
+                                    label=entry.data[CONF_USERNAME],
+                                )
+                                for entry in logins
+                            ],
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_email_login(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Log in with the account's e-mail address and a code sent to it."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -73,7 +157,7 @@ class RoborockMowerFlowHandler(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_code()
 
         return self.async_show_form(
-            step_id="user",
+            step_id="email_login",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_USERNAME): str,

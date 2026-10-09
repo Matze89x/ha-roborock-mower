@@ -3,6 +3,39 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.4.1 – Easy start
+
+**Kurzfassung (Deutsch):** Neu einrichten geht jetzt einfacher. Ist die offizielle
+Roborock-Integration schon angemeldet, bietet die Einrichtung an, **deren
+Anmeldung zu übernehmen** – ohne E-Mail-Code. Die offizielle Integration läuft
+unverändert weiter. Außerdem sind bei einer neuen Einrichtung nur noch die
+wichtigsten **24 statt 46 Entitäten** aktiv. Alles Weitere bleibt vorhanden und
+lässt sich einzeln aktivieren. Bestehende Installationen behalten ihre
+Einstellungen.
+
+### New
+
+- Config flow: when the official Roborock integration is set up, a menu offers
+  to use its login (same account, `user_data` and `base_url` copied, no
+  e-mail code) or to log in by e-mail as before. Accounts this integration
+  already has are not offered.
+
+### Changes
+
+- Enabled on a new installation: lawn mower, map, battery, mow state, mow
+  progress, remaining mowing time, next mow, last mow end / duration / area,
+  edge cut and zone buttons, the mowing settings, error code, last mow end
+  reason, last mow aborted, Wi-Fi signal and RTK positioning. Now disabled by
+  default: mow mode, charge state, lawn area, estimated mowing time,
+  schedules, last mow start and coverage, last event, connection route,
+  mobile network, hardware error, blade and driving speed, last fault (code,
+  date), wait after rain, rain protection, do not disturb (and its time),
+  anti-theft, and the Stop and Cancel Dock buttons (the lawn mower entity can
+  stop). Blade lifespan (models that report it) is enabled.
+- Mowing efficiency and cutting height are configuration entities, like the
+  other mowing settings.
+- The e-mail login step is now called `email_login`.
+
 ## 0.4.0 – The map
 
 **Kurzfassung (Deutsch):** Die Karte ist da. Die neue Entität **Karte** zeigt
