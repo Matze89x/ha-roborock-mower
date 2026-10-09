@@ -704,13 +704,6 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         value_fn=_preference_number("mow_times"),
     ),
     RobotStatusSensorDescription(
-        key="mow_direction",
-        translation_key="mow_direction",
-        native_unit_of_measurement=DEGREE,
-        icon="mdi:compass-outline",
-        value_fn=_preference_number("direction"),
-    ),
-    RobotStatusSensorDescription(
         key="direction_mode",
         translation_key="direction_mode",
         icon="mdi:arrow-decision-outline",

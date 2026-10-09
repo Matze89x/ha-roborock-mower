@@ -154,14 +154,6 @@ BINARY_SENSORS: list[RobotStatusBinarySensorDescription] = [
         value_fn=_flag("navigation", "map_editing"),
     ),
     RobotStatusBinarySensorDescription(
-        key="keep_edge",
-        translation_key="keep_edge",
-        icon="mdi:border-outside",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=lambda info: as_flag(info.preference.get("keep_edge")),
-    ),
-    RobotStatusBinarySensorDescription(
         key="path_obstacle_detection",
         translation_key="path_obstacle_detection",
         icon="mdi:road-variant",

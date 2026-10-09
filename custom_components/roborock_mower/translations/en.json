@@ -72,9 +72,6 @@
       "map_editing": {
         "name": "Map being edited"
       },
-      "keep_edge": {
-        "name": "Mow along the edge"
-      },
       "rain_protection": {
         "name": "Rain protection"
       },
@@ -420,13 +417,10 @@
       "mow_passes": {
         "name": "Mowing passes"
       },
-      "mow_direction": {
-        "name": "Mowing direction"
-      },
       "direction_mode": {
         "name": "Direction mode",
         "state": {
-          "auto_deflection": "Rotate automatically",
+          "auto_deflection": "Auto",
           "fixed": "Fixed"
         }
       },
@@ -491,15 +485,18 @@
     "number": {
       "mow_height": {
         "name": "Mow Height"
+      },
+      "mow_direction": {
+        "name": "Mowing direction (angle)"
       }
     },
     "select": {
       "mow_eff_mode": {
-        "name": "Efficiency Mode",
+        "name": "Mowing efficiency",
         "state": {
-          "daily": "Daily",
+          "daily": "Standard",
           "efficient": "Efficient",
-          "manicure": "Manicure"
+          "manicure": "Manicure (not in the app)"
         }
       }
     },
@@ -515,6 +512,11 @@
       },
       "mow_area": {
         "name": "Mow zone: {area}"
+      }
+    },
+    "switch": {
+      "edge_cut_while_mowing": {
+        "name": "Edge cut while mowing"
       }
     }
   },
@@ -584,6 +586,34 @@
         "query_types": {
           "name": "Queries",
           "description": "Optional list of query names to try (each must start with GET_)."
+        }
+      }
+    },
+    "app_strings": {
+      "name": "Search app texts",
+      "description": "Downloads the official Roborock app plugin for the mower (with your own account, like the app does) and returns its texts that contain one of the given words, e.g. the exact names of setting values. A tool to make more settings selectable.",
+      "fields": {
+        "device_id": {
+          "name": "Mower",
+          "description": "The Roborock mower(s) whose app plugin to search."
+        },
+        "contains": {
+          "name": "Contains",
+          "description": "One or more words (at least 3 characters), case does not matter, e.g. DEFLECTION."
+        }
+      }
+    },
+    "save_map_data": {
+      "name": "Save map data",
+      "description": "Asks the mower for its map and saves everything it sends during the waiting time as files in the folder roborock_mower of your configuration. Used to decode the map format. Raw map data can show your garden: share it privately only.",
+      "fields": {
+        "device_id": {
+          "name": "Mower",
+          "description": "The Roborock mower(s) to record."
+        },
+        "wait": {
+          "name": "Waiting time",
+          "description": "How long to record after asking (seconds). Longer while mowing shows the path too."
         }
       }
     }

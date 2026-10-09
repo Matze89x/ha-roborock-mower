@@ -55,3 +55,4 @@ class RoborockEfficiencyModeSelect(RoborockMowerEntity, SelectEntity):
             "Set efficiency mode",
             lambda: self.coordinator.mower_api.set_mow_eff_mode(code),
         )
+        self.coordinator.request_settings_refresh()

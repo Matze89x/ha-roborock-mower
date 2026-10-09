@@ -3,10 +3,27 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
-## 0.2.2 – Settings, fault history and schedules from the mower
+## 0.3.0 – Settings to switch, fault history, schedules, stop
 
-**Kurzfassung (Deutsch):** Mit den Abfragenamen aus der Roborock-App hat der
-Mäher 37 Abfragen beantwortet. Daraus kommen jetzt:
+**Kurzfassung (Deutsch):** Einstellungen lassen sich jetzt auch ändern, nicht
+nur ablesen:
+- **Kantenschnitt beim Mähen** als Schalter
+- **Mährichtung (Winkel)** in 5°-Schritten
+- **Mäheffizienz** heißt wie in der App: Standard / Effizient, und „Feinschnitt“
+  bleibt als dritte Option, die die App beim Q105 nicht anbietet
+
+Geschrieben wird immer die ganze Mäheinstellung. Kann sie nicht gelesen
+werden, wird nichts geändert, damit nichts anderes zurückgesetzt wird. Die
+Rasenmäher-Entität kann jetzt auch **Stopp** (Home Assistant 2026.10).
+
+Zwei neue Werkzeuge:
+- **App-Texte suchen:** findet z. B. die genauen Namen der Richtungsmodi
+  „Optimal“ und „Benutzerdefiniert“.
+- **Kartendaten speichern:** zeichnet die Kartendaten des Mähers als Dateien
+  auf, um das Kartenformat zu entschlüsseln.
+
+Mit den Abfragenamen aus der Roborock-App hat der Mäher 37 Abfragen
+beantwortet. Daraus kommen jetzt:
 - **letzter Fehler:** Code und Datum aus dem Fehlerverlauf
 - **Regenschutz** und **Wartezeit nach Regen**
 - **Nicht stören** mit Zeitfenster, dazu ein Sensor, ob die Nicht-stören-Zeit
@@ -25,6 +42,19 @@ geschwärzt.
 
 ### New
 
+- **Controls** (configuration entities, written with `SET_MOW_PREFERENCE`):
+  switch "Edge cut while mowing" (`keep_edge`), number "Mowing direction
+  (angle)" (`direction`, 0–180° in 5° steps). The mowing efficiency select is
+  named like in the app ("Standard", "Efficient") and keeps "Manicure (not in
+  the app)". After a change the settings are read again.
+- **Lawn mower "stop"** (`lawn_mower.stop`, Home Assistant 2026.10+): ends
+  the task where the mower is.
+- **Action `app_strings`:** returns the texts of the official app plugin
+  that contain given words (e.g. `DEFLECTION`), to find exact setting values.
+- **Action `save_map_data`:** asks the mower for its map, records every
+  message it sends for a given time and saves them in
+  `<config>/roborock_mower/map_<time>/` – the first step towards showing the
+  map.
 - Settings from `GET_USER_MODE_CONFIG`, fault history from
   `GET_FAULT_RECORDS`, schedules per zone from `GET_ZONES_PLAN_INFO`, read
   together with the mowing preferences (every 30 minutes, after a settings
@@ -43,6 +73,14 @@ geschwärzt.
   (exact, also for overlapping strings), with the old split as fallback;
   answers that are just `["ok"]` are listed under `acknowledged`.
 - Diagnostics probe the new queries too. More captures in `docs/`.
+
+### Changes
+
+- Preference writes (efficiency, cutting height, edge cut, direction) always
+  send the whole current preference and are refused when it can't be read;
+  before, a failed read sent a partial one, which could reset other settings.
+- The read-only "keep edge" binary sensor and "mowing direction" sensor are
+  replaced by the switch and number and removed.
 
 ### Fixes
 

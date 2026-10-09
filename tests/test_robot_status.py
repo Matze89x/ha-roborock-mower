@@ -7,6 +7,8 @@ import copy
 from datetime import UTC, date, datetime
 import json
 import logging
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
@@ -358,7 +360,6 @@ def test_sensor_values_from_the_live_status() -> None:
         "map_updated": datetime(2026, 10, 9, 8, 15, 21, tzinfo=UTC),
         "status_updated": datetime(2026, 10, 9, 8, 17, tzinfo=UTC),
         "mow_passes": 1,
-        "mow_direction": 90,
         "direction_mode": "auto_deflection",
         "rotation_angle": 15,
         "boundary_perception": "intelligence",
@@ -425,7 +426,6 @@ def test_binary_sensor_values_from_the_live_status() -> None:
         "edge_cutter": True,
         "safety_lock": False,
         "map_editing": False,
-        "keep_edge": True,
         "rain_protection": True,
         "do_not_disturb": True,
         "do_not_disturb_active": False,
@@ -597,7 +597,7 @@ async def test_status_entities_follow_the_mower(
 
     # Details are registered but disabled until the user enables them.
     registry = er.async_get(hass)
-    for platform, key in (("sensor", "lora_status"), ("binary_sensor", "keep_edge")):
+    for platform, key in (("sensor", "lora_status"), ("binary_sensor", "map_editing")):
         entry = registry.async_get(_entity_id(hass, platform, key))
         assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
         assert entry.entity_category == "diagnostic"
@@ -723,3 +723,88 @@ async def test_only_data_points_the_model_has_get_entities(
     for key in ("battery", "charge_type", "mow_state", "error_code"):
         assert registry.async_get_entity_id("sensor", DOMAIN, f"{MOWER_DUID}_{key}")
     assert registry.async_get_entity_id("number", DOMAIN, f"{MOWER_DUID}_mow_height")
+
+
+async def test_settings_can_be_changed(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """Edge cut and direction are written back as the whole preference."""
+    calls: list[str] = []
+    answer = _answering(calls)
+    sent: list[dict] = []
+
+    async def _send(method: str, params: dict) -> object:
+        if params["type"] == "SET_MOW_PREFERENCE":
+            sent.append(params["mow_preference"])
+            return ["ok"]
+        return await answer(method, params)
+
+    channel.rpc_channel.send_command.side_effect = _send
+    await _setup(hass, config_entry)
+    edge = _entity_id(hass, "switch", "edge_cut_while_mowing")
+    direction = _entity_id(hass, "number", "mow_direction_angle")
+    await _wait_until(hass, lambda: hass.states.get(edge).state == "on")
+    assert float(hass.states.get(direction).state) == 90
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": edge}, blocking=True
+    )
+    assert sent[-1] == {**LIVE_PREFERENCE["preference_config"]["global"], "keep_edge": 0}
+    assert hass.states.get(edge).state == "off"
+
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": direction, "value": 45}, blocking=True
+    )
+    assert sent[-1]["direction"] == 45
+    assert sent[-1]["direction_type"] == "AUTO_DEFLECTION"
+    assert sent[-1]["mow_times"] == 1
+
+    # The lawn mower entity can stop a task (Home Assistant 2026.10+).
+    mower = _entity_id(hass, "lawn_mower", "lawn_mower")
+    await hass.services.async_call(
+        "lawn_mower", "stop", {"entity_id": mower}, blocking=True
+    )
+    assert channel.rpc_channel.send_command.await_args.kwargs["params"]["app_button"] == "MOW_END"
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_save_map_data_writes_the_captured_messages(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel, tmp_path
+) -> None:
+    calls: list[str] = []
+    answer = _answering(calls)
+
+    async def _send(method: str, params: dict) -> object:
+        if params["type"] == "GET_MAP_MOW_SNAPSHOT":
+            # The map arrives as a separate message while the action waits.
+            channel.callback(SimpleNamespace(protocol=301, payload=b"\x08\x01map"))
+            channel.callback(SimpleNamespace(protocol=2, payload=b"ping"))
+            return ["ok"]
+        if params["type"] == "GET_FULL_MAP":
+            raise RoborockException('Unexpected API Result: "AAEC"')
+        return await answer(method, params)
+
+    channel.rpc_channel.send_command.side_effect = _send
+    hass.config.config_dir = str(tmp_path)
+    await _setup(hass, config_entry)
+    [device] = dr.async_entries_for_config_entry(dr.async_get(hass), config_entry.entry_id)
+    response = await hass.services.async_call(
+        DOMAIN,
+        "save_map_data",
+        {"device_id": device.id, "wait": 5},
+        blocking=True,
+        return_response=True,
+    )
+    result = response[MOWER_DUID]
+    assert result["messages"] == 1
+    folder = Path(result["folder"])
+    assert folder.parent == tmp_path / DOMAIN
+    assert (folder / "000_p301.bin").read_bytes() == b"\x08\x01map"
+    assert (folder / "GET_FULL_MAP.bin").read_bytes() == b"\x00\x01\x02"
+    assert json.loads((folder / "GET_MAP_DIFFS.json").read_text()) == ["ok"]
+    assert {entry["file"] for entry in result["files"]} >= {
+        "000_p301.bin",
+        "GET_FULL_MAP.bin",
+        "GET_MAP_MOW_SNAPSHOT.json",
+    }
+    assert await hass.config_entries.async_unload(config_entry.entry_id)

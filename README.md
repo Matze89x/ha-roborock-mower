@@ -22,7 +22,7 @@ Was sich in welcher Version geändert hat, steht in den
 
 ## Funktionen
 
-- **Rasenmäher-Entität** – Mähen starten (ganze Fläche), Pause, Fortsetzen,
+- **Rasenmäher-Entität** – Mähen starten (ganze Fläche), Pause, Fortsetzen, Stopp,
   zurück zur Station; Status: mäht / pausiert / kehrt zurück / angedockt / untätig / Fehler
 - **Kantenschnitt** (Taste) – startet den Kanten-/Randschnitt für die gespeicherten Zonen
 - **Stopp** und **Rückkehr abbrechen** (Tasten)
@@ -41,14 +41,18 @@ Was sich in welcher Version geändert hat, steht in den
   **Diagnose** vorhanden, aber standardmäßig deaktiviert. Der Mäher wird dafür
   selbst gefragt (lokal oder über MQTT, nicht über die begrenzte Cloud-Schnittstelle):
   jede Minute beim Mähen, sonst alle 30 Minuten und sofort nach einer Statusänderung.
-- **Schnitthöhe** (Zahl) und **Effizienzmodus** (Auswahl: Täglich / Effizient / Feinschnitt)
+- **Einstellungen ändern** – Mäheffizienz (Standard / Effizient / Feinschnitt),
+  Kantenschnitt beim Mähen (Schalter), Mährichtung (Winkel in 5°-Schritten),
+  Schnitthöhe (wo das Modell sie hat)
 - **Zone mähen: …** (eine Taste pro gespeicherter Zone) – startet das Zonenmähen
 - **Routinen** aus der Roborock-App erscheinen als Tasten
 - **Aktionen** `roborock_mower.mow_areas` (Zonen mähen),
   `roborock_mower.list_areas` (Zonen auflisten), `roborock_mower.query`
   (reine Lese-Abfrage an den Mäher, z. B. `GET_ROBOT_STATUS`, zum Finden neuer Werte)
   und `roborock_mower.scan_queries` (holt die Abfragenamen aus der offiziellen
-  Roborock-App-Erweiterung und probiert sie nacheinander am Mäher aus)
+  Roborock-App-Erweiterung und probiert sie nacheinander am Mäher aus); dazu die
+  Entwickler-Aktionen `roborock_mower.app_strings` (Texte der App-Erweiterung
+  suchen) und `roborock_mower.save_map_data` (Kartendaten als Dateien speichern)
 - **Datenschutz:** GPS-Position, MAC- und IP-Adressen sowie der WLAN-Name des Mähers
   werden in Diagnose, Abfrage-Antworten und Logs geschwärzt
 
@@ -158,7 +162,7 @@ What changed in which version is listed in the
 
 ## Features
 
-- **Lawn mower entity** – start (full lawn), pause, resume, return to dock;
+- **Lawn mower entity** – start (full lawn), pause, resume, stop, return to dock;
   activity: mowing / paused / returning / docked / idle / error
 - **Edge Cut** (for the saved areas), **Stop** and **Cancel Dock** buttons
 - **Sensors** – battery, mow progress, mow state, mow mode, charge state, error
@@ -176,13 +180,17 @@ What changed in which version is listed in the
   They are asked from the mower itself (locally or via MQTT, never the
   rate-limited cloud API): every minute while mowing, otherwise every 30 minutes
   and right after a state change.
-- **Mow Height** (number) and **Efficiency Mode** (select: Daily / Efficient / Manicure)
+- **Change settings** – mowing efficiency (Standard / Efficient / Manicure), edge
+  cut while mowing (switch), mowing direction (angle in 5° steps), cutting height
+  (where the model has it)
 - **Mow zone: …** – one button per saved area starts a zone mow
 - **Routines** from the Roborock app appear as buttons
 - **Actions** `roborock_mower.mow_areas`, `roborock_mower.list_areas`,
   `roborock_mower.query` (read-only query to the mower, e.g. `GET_ROBOT_STATUS`,
   to discover new values) and `roborock_mower.scan_queries` (takes the request
-  names from the official Roborock app plugin and tries them one by one, read-only)
+  names from the official Roborock app plugin and tries them one by one, read-only);
+  plus the developer actions `roborock_mower.app_strings` (search the app plugin's
+  texts) and `roborock_mower.save_map_data` (save the map data as files)
 - **Privacy:** the mower's GPS position, MAC and IP addresses and Wi-Fi name are
   redacted in diagnostics, query answers and logs
 

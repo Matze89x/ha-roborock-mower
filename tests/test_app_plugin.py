@@ -222,3 +222,48 @@ async def test_scan_falls_back_to_the_built_in_list(
         result = await _scan(hass, device_id, from_app=False)
         assert "app_errors" not in result
         assert result["source"] == "built-in list"
+
+
+def test_extract_strings_by_word() -> None:
+    from custom_components.roborock_mower.app_plugin import extract_strings
+
+    bundle = b'var d={AUTO_DEFLECTION:1,"OPTIMAL_DIRECTION":2,"CUSTOM_DIRECTION":3};"isArray"'
+    storage = b"AUTO_DEFLECTIONOPTIMAL_DIRECTIONisArray"
+    hermes = _hermes(storage, small=[(0, 15), (15, 17), (32, 7)], overflow=[])
+    archive = _zip({"main.jsbundle": bundle, "index.hbc": hermes})
+    assert extract_strings(archive, ["direction", "DEFLECTION"]) == [
+        "AUTO_DEFLECTION",
+        "CUSTOM_DIRECTION",
+        "OPTIMAL_DIRECTION",
+    ]
+    assert extract_strings(archive, ["nothing"]) == []
+
+
+async def test_app_strings_action(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+) -> None:
+    storage = b"AUTO_DEFLECTIONOPTIMAL_DIRECTION"
+    aioclient_mock.get(
+        PLUGIN_URL,
+        content=_zip({"index.hbc": _hermes(storage, small=[(0, 15), (15, 17)], overflow=[])}),
+    )
+    base = "custom_components.roborock_mower.vendor.roborock.web_api.RoborockApiClient"
+    with (
+        patch(f"{base}.get_products", AsyncMock(return_value=_products())),
+        patch(f"{base}.download_code", AsyncMock(return_value=PLUGIN_URL)),
+        patch(f"{base}.download_category_code", AsyncMock(return_value={})),
+    ):
+        device_id = await _setup(hass, config_entry)
+        response = await hass.services.async_call(
+            DOMAIN,
+            "app_strings",
+            {"device_id": device_id, "contains": ["deflection", "OPTIMAL"]},
+            blocking=True,
+            return_response=True,
+        )
+    assert response[MOWER_DUID] == {
+        "strings": ["AUTO_DEFLECTION", "OPTIMAL_DIRECTION"],
+        "errors": [],
+    }

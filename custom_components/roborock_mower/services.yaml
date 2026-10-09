@@ -68,3 +68,34 @@ scan_queries:
       example: '["GET_ROBOT_INFO", "GET_MAP_NAMES"]'
       selector:
         object:
+
+app_strings:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: roborock_mower
+          multiple: true
+    contains:
+      required: true
+      example: '["DEFLECTION", "DIRECTION"]'
+      selector:
+        object:
+
+save_map_data:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: roborock_mower
+          multiple: true
+    wait:
+      required: false
+      default: 20
+      selector:
+        number:
+          min: 5
+          max: 300
+          unit_of_measurement: s

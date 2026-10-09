@@ -72,9 +72,6 @@
       "map_editing": {
         "name": "Karte wird bearbeitet"
       },
-      "keep_edge": {
-        "name": "Am Rand entlang mähen"
-      },
       "rain_protection": {
         "name": "Regenschutz"
       },
@@ -420,13 +417,10 @@
       "mow_passes": {
         "name": "Mähdurchgänge"
       },
-      "mow_direction": {
-        "name": "Mährichtung"
-      },
       "direction_mode": {
         "name": "Richtungsmodus",
         "state": {
-          "auto_deflection": "Automatisch drehen",
+          "auto_deflection": "Auto",
           "fixed": "Fest"
         }
       },
@@ -491,15 +485,18 @@
     "number": {
       "mow_height": {
         "name": "Schnitthöhe"
+      },
+      "mow_direction": {
+        "name": "Mährichtung (Winkel)"
       }
     },
     "select": {
       "mow_eff_mode": {
-        "name": "Effizienzmodus",
+        "name": "Mäheffizienz",
         "state": {
-          "daily": "Täglich",
+          "daily": "Standard",
           "efficient": "Effizient",
-          "manicure": "Feinschnitt"
+          "manicure": "Feinschnitt (nicht in der App)"
         }
       }
     },
@@ -515,6 +512,11 @@
       },
       "mow_area": {
         "name": "Zone mähen: {area}"
+      }
+    },
+    "switch": {
+      "edge_cut_while_mowing": {
+        "name": "Kantenschnitt beim Mähen"
       }
     }
   },
@@ -584,6 +586,34 @@
         "query_types": {
           "name": "Abfragen",
           "description": "Optionale Liste von Abfragenamen (jeweils mit GET_ beginnend)."
+        }
+      }
+    },
+    "app_strings": {
+      "name": "App-Texte suchen",
+      "description": "Lädt die offizielle Roborock-App-Erweiterung des Mähers (mit deinem eigenen Konto, wie die App) und gibt ihre Texte zurück, die eines der angegebenen Wörter enthalten, z. B. die genauen Namen von Einstellungswerten. Hilfsmittel, um weitere Einstellungen auswählbar zu machen.",
+      "fields": {
+        "device_id": {
+          "name": "Mähroboter",
+          "description": "Der/die Roborock-Mähroboter, deren App-Erweiterung durchsucht wird."
+        },
+        "contains": {
+          "name": "Enthält",
+          "description": "Ein oder mehrere Wörter (mindestens 3 Zeichen), Groß-/Kleinschreibung egal, z. B. DEFLECTION."
+        }
+      }
+    },
+    "save_map_data": {
+      "name": "Kartendaten speichern",
+      "description": "Fragt den Mäher nach seiner Karte und speichert alles, was er während der Wartezeit sendet, als Dateien im Ordner roborock_mower deiner Konfiguration. Dient dazu, das Kartenformat zu entschlüsseln. Rohe Kartendaten können deinen Garten zeigen: nur privat weitergeben.",
+      "fields": {
+        "device_id": {
+          "name": "Mähroboter",
+          "description": "Der/die aufzuzeichnende(n) Roborock-Mähroboter."
+        },
+        "wait": {
+          "name": "Wartezeit",
+          "description": "Wie lange nach der Anfrage aufgezeichnet wird (Sekunden). Länger beim Mähen zeigt auch den Weg."
         }
       }
     }

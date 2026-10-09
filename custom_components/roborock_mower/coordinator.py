@@ -225,6 +225,11 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
             self._settings_due = True
         self._status_wakeup.set()
 
+    def request_settings_refresh(self) -> None:
+        """Read status and settings again soon (after a settings change)."""
+        self._settings_due = True
+        self._status_wakeup.set()
+
     def _robot_status_interval(self) -> float:
         api = self.mower_api
         activity = derive_activity(api.status, api.return_pending, api.task_pending)

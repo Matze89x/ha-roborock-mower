@@ -15,6 +15,7 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
 CONF_USER_DATA = "user_data"
@@ -69,6 +70,10 @@ SERVICE_QUERY = "query"
 SERVICE_SCAN_QUERIES = "scan_queries"
 ATTR_QUERY_TYPES = "query_types"
 ATTR_FROM_APP = "from_app"
+SERVICE_APP_STRINGS = "app_strings"
+ATTR_CONTAINS = "contains"
+SERVICE_SAVE_MAP_DATA = "save_map_data"
+ATTR_WAIT = "wait"
 ATTR_QUERY_TYPE = "query_type"
 ATTR_PAYLOAD = "payload"
 ATTR_DEVICE_ID = "device_id"
