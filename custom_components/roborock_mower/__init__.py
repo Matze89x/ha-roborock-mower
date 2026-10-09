@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -36,6 +37,7 @@ from .const import (
     ATTR_MAP_NAME,
     ATTR_PAYLOAD,
     ATTR_QUERY_TYPE,
+    ATTR_QUERY_TYPES,
     CONF_BASE_URL,
     CONF_USER_DATA,
     DOMAIN,
@@ -43,10 +45,12 @@ from .const import (
     SERVICE_LIST_AREAS,
     SERVICE_MOW_AREAS,
     SERVICE_QUERY,
+    SERVICE_SCAN_QUERIES,
 )
 from .coordinator import MowerConfigEntry, MowerRuntimeData, RoborockMowerCoordinator
 from .home_data import SOURCE_CLOUD, HomeDataProvider
 from .mower_api import MowerApi, is_mower, parse_dps_push, redact_dps
+from .robot_status import redact_private
 from .storage import MowerCacheStore
 from .vendor.roborock.data import HomeData, UserData
 from .vendor.roborock.devices.cache import DeviceCache
@@ -86,6 +90,44 @@ _QUERY_SCHEMA = vol.Schema(
     }
 )
 
+_SCAN_QUERIES_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_QUERY_TYPES): vol.All(cv.ensure_list, [cv.string]),
+    }
+)
+
+# Read-only query names tried by the scan_queries action when none are given:
+# guesses for data the app shows but GET_ROBOT_STATUS lacks (blade and other
+# consumables, mowing statistics, schedules, rain and wildlife protection).
+SCAN_QUERY_CANDIDATES = (
+    "GET_CONSUMABLES",
+    "GET_CONSUMABLE",
+    "GET_CONSUMABLE_INFO",
+    "GET_STATISTICS",
+    "GET_MOW_STATISTICS",
+    "GET_TOTAL_STATISTICS",
+    "GET_MOW_SUMMARY",
+    "GET_MOW_RECORDS",
+    "GET_MOW_HISTORY",
+    "GET_PLANS",
+    "GET_MOW_PLANS",
+    "GET_PLAN_LIST",
+    "GET_SCHEDULE",
+    "GET_RAIN_CONFIG",
+    "GET_RAIN_DETECTION",
+    "GET_WILDLIFE_PROTECTION",
+    "GET_DND",
+    "GET_ROBOT_CONFIG",
+    "GET_ROBOT_INFO",
+    "GET_DEVICE_INFO",
+    "GET_VERSION",
+    "GET_NETWORK_INFO",
+    "GET_ANTI_THEFT",
+    "GET_CUTTER_INFO",
+)
+SCAN_QUERY_TIMEOUT = 6
+
 _LIST_AREAS_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
@@ -122,6 +164,7 @@ def _make_push_handler(
         def _update() -> None:
             _LOGGER.debug("[%s] DPS push: %s", duid, redact_dps(dps))
             coordinator.async_set_updated_data(mower_api.apply_push(dps))
+            coordinator.note_push(mower_api.last_changes)
 
         # Apply on the event loop so DPS state isn't mutated from two threads.
         coordinator.hass.loop.call_soon_threadsafe(_update)
@@ -205,7 +248,39 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     raise ServiceValidationError(str(err)) from err
                 except RoborockException as err:
                     raise HomeAssistantError(f"Query failed: {err}") from err
-                result[coordinator.device.duid] = {"answer": answer}
+                # Never hand out the mower's position or network identifiers.
+                result[coordinator.device.duid] = {"answer": redact_private(answer)}
+        return result
+
+    async def _scan_queries(call: ServiceCall) -> ServiceResponse:
+        names = [
+            name.strip().upper()
+            for name in call.data.get(ATTR_QUERY_TYPES) or SCAN_QUERY_CANDIDATES
+        ]
+        if bad := [name for name in names if not name.startswith("GET_")]:
+            raise ServiceValidationError(
+                f"Only read-only GET_* queries are allowed: {', '.join(bad)}"
+            )
+        result: dict[str, Any] = {}
+        for device_id in call.data[ATTR_DEVICE_ID]:
+            for coordinator in _coordinators_for_device(hass, device_id):
+                answered: dict[str, Any] = {}
+                failed: dict[str, str] = {}
+                # One at a time: the mower is a small device.
+                for name in names:
+                    try:
+                        async with asyncio.timeout(SCAN_QUERY_TIMEOUT):
+                            answer = await coordinator.mower_api.query(name)
+                    except TimeoutError:
+                        failed[name] = "no answer"
+                    except RoborockException as err:
+                        failed[name] = str(err)[:200]
+                    else:
+                        answered[name] = redact_private(answer)
+                result[coordinator.device.duid] = {
+                    "answered": answered,
+                    "failed": failed,
+                }
         return result
 
     hass.services.async_register(
@@ -213,6 +288,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_QUERY,
         _query,
         schema=_QUERY_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SCAN_QUERIES,
+        _scan_queries,
+        schema=_SCAN_QUERIES_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
@@ -380,6 +462,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
         home_data_provider.source,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    for coordinator in runtime.coordinators:
+        entry.async_create_background_task(
+            hass,
+            coordinator.async_poll_robot_status(),
+            f"{DOMAIN}_robot_status_{coordinator.device.duid}",
+        )
     return True
 
 

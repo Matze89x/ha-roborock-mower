@@ -3,6 +3,62 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.2.0 – Information from the mower
+
+**Kurzfassung (Deutsch):** Die Integration fragt den Mäher jetzt selbst nach
+seinem vollständigen Status – wie die offizielle Roborock-Integration bei den
+Saugern. Neu sind Rasenfläche, geschätzte Mähdauer, nächster geplanter
+Mähvorgang und das letzte Mähen (Beginn, Ende, Dauer, Fläche, Abdeckung). Unter
+**Diagnose** stehen WLAN-Signal, Verbindungsweg, Mobilfunk (4G),
+RTK-Positionsbestimmung, Endgrund und letztes Ereignis. Viele weitere Werte
+(WLAN-Qualität, RTK-Modus, LoRa, Diebstahlschutz, Energie- und Systemzustände,
+Karte, Mäheinstellungen, Hinderniserkennung, Kantenschneider …) sind ebenfalls
+unter Diagnose vorhanden, aber standardmäßig deaktiviert. Abgefragt wird nur der
+Mäher (lokal oder über MQTT, nie über die begrenzte Cloud-Schnittstelle): jede
+Minute beim Mähen, sonst alle 10 Minuten und sofort nach einer Statusänderung.
+Alle Texte auf Deutsch und Englisch. Außerdem werden GPS-Position, MAC- und
+IP-Adressen und der WLAN-Name jetzt überall geschwärzt.
+
+### New
+
+- **Status from the mower:** the coordinator asks the mower for
+  `GET_ROBOT_STATUS` (every minute while a task runs, every 10 minutes
+  otherwise, and 5 s after a pushed state change) and for its mowing
+  preferences (every 30 minutes or after a settings change). Over the local
+  connection when there is one, else MQTT – the rate-limited cloud API is not
+  used. These routine polls stay out of the diagnostics history.
+- **Sensors:** lawn area, estimated mowing time, next scheduled mow (with
+  end, weekdays and mode as attributes), last mow start / end / duration /
+  area / coverage.
+- **Diagnostic sensors (enabled):** last mow end reason, last event, Wi-Fi
+  signal (dBm), connection route, mobile network (4G), RTK positioning;
+  binary sensor "last mow aborted".
+- **Diagnostic entities (disabled by default):** Wi-Fi quality / connection /
+  band, RTK mode and state, network RTK at the station, LoRa connection,
+  anti-theft, energy / system / firmware-update / working / docking /
+  mapping / navigation / localization / controller states, map name, map
+  changed, status read, mowing passes, mowing direction, direction mode,
+  direction change per mow, boundary detection; binary sensors for local
+  connection, obstacle avoidance, object recognition (AI), edge trimmer
+  fitted, safety lock, map being edited and mowing along the edge.
+- State values whose full list is unknown are shown as reported (e.g. a new
+  event name) instead of breaking the sensor; known values are translated
+  (English and German).
+- **Action `roborock_mower.scan_queries`:** tries a list of read-only `GET_*`
+  queries one after another and returns which ones the mower answers – to
+  find blade wear, statistics and similar values the app shows.
+
+### Fixes
+
+- **Privacy:** the mower's network identifiers (Wi-Fi and Bluetooth MAC, IP
+  address, Wi-Fi name, BSSID) were not redacted in the diagnostics probes and
+  the `query` answer; they are now, together with the GPS position. The RTK
+  `position_type` is no longer redacted by mistake.
+- Query answers are no longer written to the debug log or the history (only
+  their size), since they contain the position.
+- The diagnostics' message counts show protocol names (`general_request`,
+  `rpc_response`, ...) instead of numbers.
+
 ## 0.1.2 – Roborock logo, cleaner start, discovery tools
 
 **Kurzfassung (Deutsch):** Das Gerät zeigt jetzt das Roborock-Logo (wie die

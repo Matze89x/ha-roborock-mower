@@ -8,10 +8,12 @@ from typing import Any
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import RoborockMowerCoordinator
 from .mower_api import MowerStatus
+from .robot_status import RobotInfo
 from .vendor.roborock.exceptions import RoborockException
 
 
@@ -44,6 +46,20 @@ class RoborockMowerEntity(CoordinatorEntity[RoborockMowerCoordinator]):
     @property
     def status(self) -> MowerStatus:
         return self.coordinator.data
+
+    @property
+    def robot_info(self) -> RobotInfo:
+        """The mower's full status and settings (empty until it answered)."""
+        coordinator = self.coordinator
+        return RobotInfo(
+            status=coordinator.robot_status or {},
+            preference=coordinator.mow_preference or {},
+            now=dt_util.now(),
+            updated=coordinator.robot_status_time,
+            local_connected=getattr(
+                coordinator.mower_api.channel, "is_local_connected", None
+            ),
+        )
 
     async def _async_send(
         self, action: str, command: Callable[[], Awaitable[Any]]

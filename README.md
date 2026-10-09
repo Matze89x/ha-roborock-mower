@@ -27,14 +27,26 @@ Was sich in welcher Version geändert hat, steht in den
 - **Kantenschnitt** (Taste) – startet den Kanten-/Randschnitt für die gespeicherten Zonen
 - **Stopp** und **Rückkehr abbrechen** (Tasten)
 - **Sensoren** – Akku, Mähfortschritt, Mähstatus, Mähmodus, Ladezustand, Fehlercode,
-  Grund für Rückkehr, Pausengrund, Messer-Lebensdauer (teils Diagnose / standardmäßig
-  aus); Statuswerte auf Deutsch und Englisch
+  Grund für Rückkehr, Pausengrund, Messer-Lebensdauer; Statuswerte auf Deutsch und Englisch
+- **Infos aus dem Mäher** (wie bei der offiziellen Roborock-Integration) – Rasenfläche,
+  geschätzte Mähdauer, nächster geplanter Mähvorgang, letztes Mähen (Beginn, Ende,
+  Dauer, Fläche, Abdeckung, Endgrund, abgebrochen ja/nein); unter **Diagnose**
+  WLAN-Signal, Verbindungsweg, Mobilfunk (4G), RTK-Positionsbestimmung, letztes
+  Ereignis. Viele weitere Werte (WLAN-Qualität, RTK-Modus, LoRa, Diebstahlschutz,
+  Energie- und Systemzustände, Karte, Mäheinstellungen wie Mährichtung und
+  Durchgänge, Hinderniserkennung, Kantenschneider …) sind ebenfalls unter
+  **Diagnose** vorhanden, aber standardmäßig deaktiviert. Der Mäher wird dafür
+  selbst gefragt (lokal oder über MQTT, nicht über die begrenzte Cloud-Schnittstelle):
+  jede Minute beim Mähen, sonst alle 10 Minuten und sofort nach einer Statusänderung.
 - **Schnitthöhe** (Zahl) und **Effizienzmodus** (Auswahl: Täglich / Effizient / Feinschnitt)
 - **Zone mähen: …** (eine Taste pro gespeicherter Zone) – startet das Zonenmähen
 - **Routinen** aus der Roborock-App erscheinen als Tasten
 - **Aktionen** `roborock_mower.mow_areas` (Zonen mähen),
-  `roborock_mower.list_areas` (Zonen auflisten) und `roborock_mower.query`
+  `roborock_mower.list_areas` (Zonen auflisten), `roborock_mower.query`
   (reine Lese-Abfrage an den Mäher, z. B. `GET_ROBOT_STATUS`, zum Finden neuer Werte)
+  und `roborock_mower.scan_queries` (probiert viele Lese-Abfragen nacheinander aus)
+- **Datenschutz:** GPS-Position, MAC- und IP-Adressen sowie der WLAN-Name des Mähers
+  werden in Diagnose, Abfrage-Antworten und Logs geschwärzt
 
 ## Installation über HACS
 
@@ -139,14 +151,26 @@ What changed in which version is listed in the
   activity: mowing / paused / returning / docked / idle / error
 - **Edge Cut** (for the saved areas), **Stop** and **Cancel Dock** buttons
 - **Sensors** – battery, mow progress, mow state, mow mode, charge state, error
-  code, dock reason, pause reason, blade lifespan (some diagnostic / disabled by
-  default); state values in English and German
+  code, dock reason, pause reason, blade lifespan; state values in English and German
+- **Information from the mower** (like the official Roborock integration) – lawn
+  area, estimated mowing time, next scheduled mow, last mow (start, end,
+  duration, area, coverage, end reason, aborted yes/no); under **Diagnostic**
+  Wi-Fi signal, connection route, mobile network (4G), RTK positioning, last
+  event. Many more values (Wi-Fi quality, RTK mode, LoRa, anti-theft, energy and
+  system states, map, mowing preferences such as direction and passes, obstacle
+  avoidance, edge trimmer, …) are under **Diagnostic** too, disabled by default.
+  They are asked from the mower itself (locally or via MQTT, never the
+  rate-limited cloud API): every minute while mowing, otherwise every 10 minutes
+  and right after a state change.
 - **Mow Height** (number) and **Efficiency Mode** (select: Daily / Efficient / Manicure)
 - **Mow zone: …** – one button per saved area starts a zone mow
 - **Routines** from the Roborock app appear as buttons
-- **Actions** `roborock_mower.mow_areas`, `roborock_mower.list_areas` and
+- **Actions** `roborock_mower.mow_areas`, `roborock_mower.list_areas`,
   `roborock_mower.query` (read-only query to the mower, e.g. `GET_ROBOT_STATUS`,
-  to discover new values)
+  to discover new values) and `roborock_mower.scan_queries` (tries many read-only
+  queries one after another)
+- **Privacy:** the mower's GPS position, MAC and IP addresses and Wi-Fi name are
+  redacted in diagnostics, query answers and logs
 
 ## Installation via HACS
 

@@ -2,23 +2,49 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
     HOME_DATA_REUSE_AGE,
+    PREFERENCE_REFRESH_INTERVAL,
+    ROBOT_STATUS_ACTIVE_INTERVAL,
+    ROBOT_STATUS_IDLE_INTERVAL,
+    ROBOT_STATUS_SETTLE_DELAY,
+    ROBOT_STATUS_TIMEOUT,
     STALE_SNAPSHOT_REFRESH_INTERVAL,
     UPDATE_INTERVAL,
 )
 from .home_data import HomeDataProvider
-from .mower_api import MowerApi, MowerStatus, redact_dps
+from .mower_api import (
+    ACTIVITY_MOWING,
+    ACTIVITY_PAUSED,
+    ACTIVITY_RETURNING,
+    DPS_CHARGE_STATE,
+    DPS_CHARGE_TYPE,
+    DPS_ERROR_CODE,
+    DPS_MOW_EFF_MODE,
+    DPS_MOW_STATE,
+    DPS_MOW_TYPE,
+    DPS_PEND_TYPE,
+    MowerApi,
+    MowerStatus,
+    derive_activity,
+    redact_dps,
+)
+from .robot_status import redact_private
 from .storage import MowerCacheStore
 from .vendor.roborock.data import HomeDataDevice, HomeDataProduct
 from .vendor.roborock.exceptions import RoborockException, RoborockInvalidCredentials
@@ -41,6 +67,21 @@ class MowerRuntimeData:
 
 
 type MowerConfigEntry = ConfigEntry[MowerRuntimeData]
+
+# Data points whose change makes the full status worth asking for again
+# (a task started or ended, the mower docked, an error, settings changed).
+STATUS_TRIGGER_DPS = frozenset(
+    {
+        DPS_ERROR_CODE,
+        DPS_MOW_TYPE,
+        DPS_MOW_STATE,
+        DPS_CHARGE_STATE,
+        DPS_CHARGE_TYPE,
+        DPS_PEND_TYPE,
+        DPS_MOW_EFF_MODE,
+    }
+)
+_BUSY_ACTIVITIES = frozenset({ACTIVITY_MOWING, ACTIVITY_PAUSED, ACTIVITY_RETURNING})
 
 
 class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
@@ -86,6 +127,13 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self._home_data = home_data
         self._needs_cloud_refresh = stale
         self._poll_failing = False
+        # The mower's full status (GET_ROBOT_STATUS), private fields redacted.
+        self.robot_status: dict[str, Any] | None = None
+        self.robot_status_time: datetime | None = None
+        self._status_wakeup = asyncio.Event()
+        self._status_failing = False
+        self._preference_due = True
+        self._preference_read_at: float | None = None
 
     async def _async_update_data(self) -> MowerStatus:
         api = self.mower_api
@@ -117,3 +165,90 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
                 "[%s] Mower DPS: %s", self.device.duid, redact_dps(status.raw_dps)
             )
         return status
+
+    # -- full robot status (GET_ROBOT_STATUS) ----------------------------------
+
+    @property
+    def mow_preference(self) -> dict[str, Any] | None:
+        """The global mowing preference (passes, direction, ...), if known."""
+        cfg = self.mower_api.preference_config
+        pref = cfg.get("global") if isinstance(cfg, dict) else None
+        return pref if isinstance(pref, dict) else None
+
+    def note_push(self, changes: frozenset[int]) -> None:
+        """React to a live data-point push: re-read the full status if useful."""
+        if not changes & STATUS_TRIGGER_DPS:
+            return
+        if DPS_MOW_EFF_MODE in changes:
+            self._preference_due = True
+        self._status_wakeup.set()
+
+    def _robot_status_interval(self) -> float:
+        api = self.mower_api
+        activity = derive_activity(api.status, api.return_pending, api.task_pending)
+        interval = (
+            ROBOT_STATUS_ACTIVE_INTERVAL
+            if activity in _BUSY_ACTIVITIES
+            else ROBOT_STATUS_IDLE_INTERVAL
+        )
+        return interval.total_seconds()
+
+    async def async_poll_robot_status(self) -> None:
+        """Keep the full status fresh for as long as the config entry runs.
+
+        Polls every minute while a task runs, every ten minutes otherwise, and
+        a few seconds after the mower pushes a state change, so the "last mow"
+        values follow right after a run ends.
+        """
+        while True:
+            self._status_wakeup.clear()
+            try:
+                await self.async_refresh_robot_status()
+            except Exception:
+                # Never let one odd answer end the polling for good.
+                _LOGGER.exception("[%s] Reading the mower status failed", self.device.duid)
+            try:
+                async with asyncio.timeout(self._robot_status_interval()):
+                    await self._status_wakeup.wait()
+            except TimeoutError:
+                continue
+            # Let a burst of pushes (task end, docking) settle first.
+            await asyncio.sleep(ROBOT_STATUS_SETTLE_DELAY)
+
+    async def async_refresh_robot_status(self) -> None:
+        """Ask the mower for its full status (and now and then its settings)."""
+        api = self.mower_api
+        try:
+            async with asyncio.timeout(ROBOT_STATUS_TIMEOUT):
+                answer = await api.get_robot_status(record=False)
+        except (RoborockException, TimeoutError) as err:
+            if not self._status_failing:
+                _LOGGER.debug(
+                    "[%s] No status answer from the mower (asleep or out of "
+                    "range?): %s",
+                    self.device.duid,
+                    err or type(err).__name__,
+                )
+            self._status_failing = True
+            return
+        if answer is None:
+            return
+        if self._status_failing:
+            _LOGGER.debug("[%s] Mower answers status queries again", self.device.duid)
+        self._status_failing = False
+        self.robot_status = redact_private(answer)
+        self.robot_status_time = dt_util.utcnow()
+        if (
+            self._preference_due
+            or self._preference_read_at is None
+            or time.monotonic() - self._preference_read_at
+            > PREFERENCE_REFRESH_INTERVAL.total_seconds()
+        ):
+            try:
+                async with asyncio.timeout(ROBOT_STATUS_TIMEOUT):
+                    if await api.get_mow_preference_config(record=False) is not None:
+                        self._preference_due = False
+                        self._preference_read_at = time.monotonic()
+            except (RoborockException, TimeoutError):
+                pass
+        self.async_update_listeners()

@@ -50,6 +50,32 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "last_mow_aborted": {
+        "name": "Last mow aborted"
+      },
+      "local_connection": {
+        "name": "Local connection"
+      },
+      "obstacle_avoidance": {
+        "name": "Obstacle avoidance"
+      },
+      "object_recognition": {
+        "name": "Object recognition (AI)"
+      },
+      "edge_cutter": {
+        "name": "Edge trimmer fitted"
+      },
+      "safety_lock": {
+        "name": "Safety lock"
+      },
+      "map_editing": {
+        "name": "Map being edited"
+      },
+      "keep_edge": {
+        "name": "Mow along the edge"
+      }
+    },
     "sensor": {
       "battery": {
         "name": "Battery"
@@ -166,6 +192,219 @@
           "remote": "Remote control",
           "random": "Random"
         }
+      },
+      "lawn_area": {
+        "name": "Lawn area"
+      },
+      "estimated_mow_time": {
+        "name": "Estimated mowing time"
+      },
+      "next_mow": {
+        "name": "Next scheduled mow"
+      },
+      "last_mow_start": {
+        "name": "Last mow start"
+      },
+      "last_mow_end": {
+        "name": "Last mow end"
+      },
+      "last_mow_duration": {
+        "name": "Last mow duration"
+      },
+      "last_mow_area": {
+        "name": "Last mowed area"
+      },
+      "last_mow_coverage": {
+        "name": "Last mow coverage"
+      },
+      "last_mow_end_reason": {
+        "name": "Last mow end reason",
+        "state": {
+          "app_end": "Stopped by user"
+        }
+      },
+      "last_event": {
+        "name": "Last event",
+        "state": {
+          "mow_task_finish": "Mowing task finished"
+        }
+      },
+      "wifi_signal": {
+        "name": "Wi-Fi signal"
+      },
+      "network_route": {
+        "name": "Connection via",
+        "state": {
+          "wlan0": "Wi-Fi",
+          "wwan0": "Mobile network",
+          "ppp0": "Mobile network",
+          "usb0": "Mobile network"
+        }
+      },
+      "mobile_network": {
+        "name": "Mobile network (4G)",
+        "state": {
+          "connected": "Connected",
+          "disconnected": "Disconnected",
+          "connecting": "Connecting"
+        }
+      },
+      "rtk_position": {
+        "name": "RTK positioning",
+        "state": {
+          "fixed_solution": "RTK fix (precise)",
+          "float_solution": "RTK float (less precise)",
+          "single_solution": "GPS only",
+          "no_solution": "No position"
+        }
+      },
+      "wifi_quality": {
+        "name": "Wi-Fi quality",
+        "state": {
+          "excellent": "Excellent",
+          "good": "Good",
+          "normal": "Fair",
+          "weak": "Weak",
+          "poor": "Poor"
+        }
+      },
+      "wifi_state": {
+        "name": "Wi-Fi connection",
+        "state": {
+          "connected": "Connected",
+          "disconnected": "Disconnected",
+          "connecting": "Connecting"
+        }
+      },
+      "wifi_band": {
+        "name": "Wi-Fi band"
+      },
+      "rtk_mode": {
+        "name": "RTK mode",
+        "state": {
+          "base_rtk": "Base station",
+          "network_rtk": "Network RTK"
+        }
+      },
+      "rtk_state": {
+        "name": "RTK state",
+        "state": {
+          "active": "Active",
+          "inactive": "Inactive"
+        }
+      },
+      "network_rtk": {
+        "name": "Network RTK at the station",
+        "state": {
+          "dock_nrtk_disable": "Off",
+          "dock_nrtk_enable": "On"
+        }
+      },
+      "lora_status": {
+        "name": "LoRa connection",
+        "state": {
+          "paired": "Paired",
+          "unpaired": "Not paired",
+          "pairing": "Pairing"
+        }
+      },
+      "anti_theft": {
+        "name": "Anti-theft",
+        "state": {
+          "closed": "Off",
+          "open": "On"
+        }
+      },
+      "energy_state": {
+        "name": "Energy state",
+        "state": {
+          "sleep": "Sleeping",
+          "awake": "Awake",
+          "normal": "Normal"
+        }
+      },
+      "runtime_state": {
+        "name": "System state",
+        "state": {
+          "normal": "Normal"
+        }
+      },
+      "ota_state": {
+        "name": "Firmware update",
+        "state": {
+          "idle": "No update",
+          "downloading": "Downloading",
+          "upgrading": "Installing"
+        }
+      },
+      "working_state": {
+        "name": "Working state",
+        "state": {
+          "idle": "Idle"
+        }
+      },
+      "docking_state": {
+        "name": "Docking state",
+        "state": {
+          "idle": "Idle"
+        }
+      },
+      "mapping_state": {
+        "name": "Mapping state",
+        "state": {
+          "idle": "Idle"
+        }
+      },
+      "navigation_state": {
+        "name": "Navigation state",
+        "state": {
+          "error": "Error",
+          "idle": "Idle"
+        }
+      },
+      "slam_state": {
+        "name": "Localization state",
+        "state": {
+          "init": "Initial"
+        }
+      },
+      "mcu_state": {
+        "name": "Controller state",
+        "state": {
+          "mcu_low_power": "Power saving",
+          "mcu_normal": "Normal"
+        }
+      },
+      "map_name": {
+        "name": "Map"
+      },
+      "map_updated": {
+        "name": "Map changed"
+      },
+      "status_updated": {
+        "name": "Status read"
+      },
+      "mow_passes": {
+        "name": "Mowing passes"
+      },
+      "mow_direction": {
+        "name": "Mowing direction"
+      },
+      "direction_mode": {
+        "name": "Direction mode",
+        "state": {
+          "auto_deflection": "Rotate automatically",
+          "fixed": "Fixed"
+        }
+      },
+      "rotation_angle": {
+        "name": "Direction change per mow"
+      },
+      "boundary_perception": {
+        "name": "Boundary detection",
+        "state": {
+          "intelligence": "Smart"
+        }
       }
     },
     "number": {
@@ -246,6 +485,20 @@
         "payload": {
           "name": "Extra fields",
           "description": "Optional additional fields for the query."
+        }
+      }
+    },
+    "scan_queries": {
+      "name": "Scan mower queries",
+      "description": "Tries a list of read-only queries (GET_*) on the mower one after another and returns which ones it answers. Helps to find data the integration does not show yet, such as blade wear or mowing statistics. Never moves the mower or changes settings; takes up to a few minutes.",
+      "fields": {
+        "device_id": {
+          "name": "Mower",
+          "description": "The Roborock mower(s) to scan."
+        },
+        "query_types": {
+          "name": "Queries",
+          "description": "Optional list of query names to try (each must start with GET_). Without it, a built-in list of likely names is tried."
         }
       }
     }

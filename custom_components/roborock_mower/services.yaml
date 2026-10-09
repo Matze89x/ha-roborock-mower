@@ -49,3 +49,17 @@ query:
       example: "{}"
       selector:
         object:
+
+scan_queries:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: roborock_mower
+          multiple: true
+    query_types:
+      required: false
+      example: '["GET_CONSUMABLES", "GET_STATISTICS"]'
+      selector:
+        object:

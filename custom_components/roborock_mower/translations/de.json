@@ -50,6 +50,32 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "last_mow_aborted": {
+        "name": "Letztes Mähen abgebrochen"
+      },
+      "local_connection": {
+        "name": "Lokale Verbindung"
+      },
+      "obstacle_avoidance": {
+        "name": "Hindernisvermeidung"
+      },
+      "object_recognition": {
+        "name": "Objekterkennung (KI)"
+      },
+      "edge_cutter": {
+        "name": "Kantenschneider vorhanden"
+      },
+      "safety_lock": {
+        "name": "Sicherheitssperre"
+      },
+      "map_editing": {
+        "name": "Karte wird bearbeitet"
+      },
+      "keep_edge": {
+        "name": "Am Rand entlang mähen"
+      }
+    },
     "sensor": {
       "battery": {
         "name": "Akku"
@@ -166,6 +192,219 @@
           "remote": "Fernsteuerung",
           "random": "Zufällig"
         }
+      },
+      "lawn_area": {
+        "name": "Rasenfläche"
+      },
+      "estimated_mow_time": {
+        "name": "Geschätzte Mähdauer"
+      },
+      "next_mow": {
+        "name": "Nächster geplanter Mähvorgang"
+      },
+      "last_mow_start": {
+        "name": "Letztes Mähen: Beginn"
+      },
+      "last_mow_end": {
+        "name": "Letztes Mähen: Ende"
+      },
+      "last_mow_duration": {
+        "name": "Letztes Mähen: Dauer"
+      },
+      "last_mow_area": {
+        "name": "Letztes Mähen: Fläche"
+      },
+      "last_mow_coverage": {
+        "name": "Letztes Mähen: Abdeckung"
+      },
+      "last_mow_end_reason": {
+        "name": "Letztes Mähen: Endgrund",
+        "state": {
+          "app_end": "Vom Benutzer beendet"
+        }
+      },
+      "last_event": {
+        "name": "Letztes Ereignis",
+        "state": {
+          "mow_task_finish": "Mähauftrag beendet"
+        }
+      },
+      "wifi_signal": {
+        "name": "WLAN-Signal"
+      },
+      "network_route": {
+        "name": "Verbindung über",
+        "state": {
+          "wlan0": "WLAN",
+          "wwan0": "Mobilfunk",
+          "ppp0": "Mobilfunk",
+          "usb0": "Mobilfunk"
+        }
+      },
+      "mobile_network": {
+        "name": "Mobilfunk (4G)",
+        "state": {
+          "connected": "Verbunden",
+          "disconnected": "Getrennt",
+          "connecting": "Verbindet"
+        }
+      },
+      "rtk_position": {
+        "name": "RTK-Positionsbestimmung",
+        "state": {
+          "fixed_solution": "RTK-Fix (genau)",
+          "float_solution": "RTK-Float (ungenauer)",
+          "single_solution": "Nur GPS",
+          "no_solution": "Keine Position"
+        }
+      },
+      "wifi_quality": {
+        "name": "WLAN-Qualität",
+        "state": {
+          "excellent": "Sehr gut",
+          "good": "Gut",
+          "normal": "Mittel",
+          "weak": "Schwach",
+          "poor": "Schlecht"
+        }
+      },
+      "wifi_state": {
+        "name": "WLAN-Verbindung",
+        "state": {
+          "connected": "Verbunden",
+          "disconnected": "Getrennt",
+          "connecting": "Verbindet"
+        }
+      },
+      "wifi_band": {
+        "name": "WLAN-Band"
+      },
+      "rtk_mode": {
+        "name": "RTK-Modus",
+        "state": {
+          "base_rtk": "Basisstation",
+          "network_rtk": "Netzwerk-RTK"
+        }
+      },
+      "rtk_state": {
+        "name": "RTK-Zustand",
+        "state": {
+          "active": "Aktiv",
+          "inactive": "Inaktiv"
+        }
+      },
+      "network_rtk": {
+        "name": "Netzwerk-RTK an der Station",
+        "state": {
+          "dock_nrtk_disable": "Aus",
+          "dock_nrtk_enable": "Ein"
+        }
+      },
+      "lora_status": {
+        "name": "LoRa-Verbindung",
+        "state": {
+          "paired": "Gekoppelt",
+          "unpaired": "Nicht gekoppelt",
+          "pairing": "Koppelt"
+        }
+      },
+      "anti_theft": {
+        "name": "Diebstahlschutz",
+        "state": {
+          "closed": "Aus",
+          "open": "Ein"
+        }
+      },
+      "energy_state": {
+        "name": "Energiezustand",
+        "state": {
+          "sleep": "Ruhezustand",
+          "awake": "Wach",
+          "normal": "Normal"
+        }
+      },
+      "runtime_state": {
+        "name": "Systemzustand",
+        "state": {
+          "normal": "Normal"
+        }
+      },
+      "ota_state": {
+        "name": "Firmware-Update",
+        "state": {
+          "idle": "Kein Update",
+          "downloading": "Lädt herunter",
+          "upgrading": "Installiert"
+        }
+      },
+      "working_state": {
+        "name": "Arbeitszustand",
+        "state": {
+          "idle": "Leerlauf"
+        }
+      },
+      "docking_state": {
+        "name": "Andockzustand",
+        "state": {
+          "idle": "Leerlauf"
+        }
+      },
+      "mapping_state": {
+        "name": "Kartierungszustand",
+        "state": {
+          "idle": "Leerlauf"
+        }
+      },
+      "navigation_state": {
+        "name": "Navigationszustand",
+        "state": {
+          "error": "Fehler",
+          "idle": "Leerlauf"
+        }
+      },
+      "slam_state": {
+        "name": "Lokalisierungszustand",
+        "state": {
+          "init": "Ausgangszustand"
+        }
+      },
+      "mcu_state": {
+        "name": "Steuerungszustand",
+        "state": {
+          "mcu_low_power": "Energiesparmodus",
+          "mcu_normal": "Normal"
+        }
+      },
+      "map_name": {
+        "name": "Karte"
+      },
+      "map_updated": {
+        "name": "Karte geändert"
+      },
+      "status_updated": {
+        "name": "Status abgefragt"
+      },
+      "mow_passes": {
+        "name": "Mähdurchgänge"
+      },
+      "mow_direction": {
+        "name": "Mährichtung"
+      },
+      "direction_mode": {
+        "name": "Richtungsmodus",
+        "state": {
+          "auto_deflection": "Automatisch drehen",
+          "fixed": "Fest"
+        }
+      },
+      "rotation_angle": {
+        "name": "Richtungsänderung je Mähvorgang"
+      },
+      "boundary_perception": {
+        "name": "Randerkennung",
+        "state": {
+          "intelligence": "Intelligent"
+        }
       }
     },
     "number": {
@@ -246,6 +485,20 @@
         "payload": {
           "name": "Zusätzliche Felder",
           "description": "Optionale weitere Felder für die Abfrage."
+        }
+      }
+    },
+    "scan_queries": {
+      "name": "Mäher-Abfragen durchsuchen",
+      "description": "Probiert nacheinander eine Liste reiner Lese-Abfragen (GET_*) am Mäher aus und gibt zurück, welche er beantwortet. Hilft, Daten zu finden, die die Integration noch nicht anzeigt, z. B. Messerverschleiß oder Mähstatistiken. Bewegt den Mäher nie und ändert keine Einstellungen; dauert bis zu einigen Minuten.",
+      "fields": {
+        "device_id": {
+          "name": "Mähroboter",
+          "description": "Der/die zu durchsuchende(n) Roborock-Mähroboter."
+        },
+        "query_types": {
+          "name": "Abfragen",
+          "description": "Optionale Liste von Abfragenamen (jeweils mit GET_ beginnend). Ohne Angabe wird eine eingebaute Liste wahrscheinlicher Namen probiert."
         }
       }
     }

@@ -230,3 +230,43 @@ Zone-mow flow: `get_areas()` → pick id(s) → `MOW_SELECT` with
 - `SET_MOW_PREFERENCE` efficiency-mode *write* taking effect.
 - Which id `MOW_SELECT` wants in `modify_map.boundaries[].id` (§7).
 - DP 134 read unit parity with the `main_cutter_height` write unit.
+
+---
+
+## 9. Full status — `GET_ROBOT_STATUS` (read)
+
+Answered as JSON (`{"type":"ROBOT_STATUS", ...}`, recovered like every query).
+Live on a RockNeo Q105 (fw 02.72.44); the fields the entities use
+(`sensor.py` / `binary_sensor.py`, helpers in `robot_status.py`):
+
+| path | example | entity |
+|------|---------|--------|
+| `mow_progress.mow_all_area` | `79.12` (m²) | lawn area |
+| `mow_progress.expected_time` | `2464.0` (s) | estimated mowing time |
+| `last_mow_abstract.start.time` / `.end.time` | `"1791533671"` (unix s, string) | last mow start / end |
+| `last_mow_abstract.seconds` / `.area` / `.percentage` | `43` / `1.28` / `3.21` | last mow duration / area / coverage |
+| `last_mow_abstract.end.type` | `APP_END` (also for a dock command from HA) | last mow end reason |
+| `last_mow_abstract.abnormal_end` | `false` | last mow aborted |
+| `next_plan.start` / `.end` / `.days[].type` / `.mode` | template date (only the time of day counts), `FRIDAY`, `GLOBAL` | next scheduled mow |
+| `robot_status_event[-1]` | `MOW_TASK_FINISH` | last event |
+| `network.rssi` / `.wifi_band` | `-62` / `2.4G` | Wi-Fi signal / band |
+| `wireless_devices.route` / `.wifi.state` / `.wifi.level` / `.mobile_4g.state` | `WLAN0` / `CONNECTED` / `GOOD` / `CONNECTED` | connection route, Wi-Fi, 4G |
+| `rtk.position_type` (= `wireless_devices.rtk_position`) | `FIXED_SOLUTION` | RTK positioning |
+| `rtk.nrtk.rtk_mode` / `.dock_nrtk_status` | `BASE_RTK` / `DOCK_NRTK_DISABLE` | RTK mode, network RTK |
+| `fsm_rtk_state`, `lora_status`, `fsm_anti_theft_state`, `fsm_energy_state`, `runtime_state`, `fsm_ota_state`, `fsm_dock_state`, `fsm_map_state` | `ACTIVE`, `PAIRED`, `CLOSED` (= off), `SLEEP`, `NORMAL`, `IDLE` | state sensors |
+| `robot_task.working_state`, `navigation.type`, `slam.type`, `hardware.mcu_state` | `IDLE`, `ERROR`, `INIT`, `MCU_LOW_POWER` | state sensors |
+| `navigation.ai_obs_cmd.generic_obs_avoidance` / `.class_obs_avoidance` | `true` | obstacle avoidance / object recognition |
+| `hardware.cutter_info.has_edge_cutter`, `hardware.safety_lock_status`, `navigation.map_editing` | `true`, `false`, `false` | binary sensors |
+| `map_abstracts[0].name` / `.file_change_time` | `APP_MAP1.bin` / `2026-10-09-08-15-21` (UTC) | map, map changed |
+
+Private and never shown: `navigation.robot_gps` (latitude/longitude),
+`network.mac/ip/ssid/bssid`, `bluetooth` (MAC + a name derived from it) –
+`robot_status.redact_private` removes them before anything is stored, shown or
+exported. Not in this answer (still to find): blade/consumable wear, total
+mowing statistics, rain and wildlife protection settings – the
+`scan_queries` action tries likely query names for them.
+
+`GET_MOW_PREFERENCE_CONFIG` → `preference_config.global`: `mow_times`
+(passes), `direction` (°), `direction_type` (`AUTO_DEFLECTION`),
+`rotation_angle` (° per mow), `boundary_perception` (`INTELLIGENCE`),
+`keep_edge` (1/0), `effective` (efficiency mode).

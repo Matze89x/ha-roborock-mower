@@ -1,8 +1,9 @@
 """Diagnostics for the Roborock Mower integration.
 
 Download from Settings > Devices & services > Roborock Mower > ... > Download
-diagnostics. Credentials, the account e-mail, serial numbers, local keys and the
-mower's GPS position are redacted. ``history`` lists the last commands, the
+diagnostics. Credentials, the account e-mail, serial numbers, local keys, the
+mower's GPS position and its network identifiers (MAC, IP, Wi-Fi name) are
+redacted. ``history`` lists the last commands, the
 mower's answers and every data-point change with local timestamps -- enough to
 follow a test run without a debug log.
 """
@@ -23,6 +24,7 @@ from homeassistant.loader import async_get_integration
 from .const import CONF_BASE_URL, DOMAIN
 from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
 from .mower_api import DPS_GPS_COORDINATE, derive_activity, redact_dps
+from .robot_status import redact_private
 from .vendor import ROBOROCK_VERSION
 
 TO_REDACT = {"gps_coordinate", "local_key", "sn", "duid", "lat", "lon"}
@@ -36,20 +38,14 @@ PROBE_QUERIES = (
     "GET_MAP_NAMES",
 )
 PROBE_TIMEOUT = 8
-_PROBE_REDACT_HINTS = ("gps", "lat", "lon", "position", "coordinate")
 
 
-def _redact_probe(value: Any) -> Any:
-    """Drop anything that looks like a geographic position from a probe answer."""
+def _shorten(value: Any) -> Any:
+    """Replace very long strings (raw map data) by their length."""
     if isinstance(value, dict):
-        return {
-            key: "**REDACTED**"
-            if any(hint in str(key).lower() for hint in _PROBE_REDACT_HINTS)
-            else _redact_probe(item)
-            for key, item in value.items()
-        }
+        return {key: _shorten(item) for key, item in value.items()}
     if isinstance(value, list):
-        return [_redact_probe(item) for item in value]
+        return [_shorten(item) for item in value]
     if isinstance(value, str) and len(value) > 2000:
         return f"<{len(value)} characters>"
     return value
@@ -57,8 +53,8 @@ def _redact_probe(value: Any) -> Any:
 
 async def _probe(api: Any, query_type: str) -> Any:
     try:
-        return _redact_probe(
-            await asyncio.wait_for(api.query(query_type), PROBE_TIMEOUT)
+        return _shorten(
+            redact_private(await asyncio.wait_for(api.query(query_type), PROBE_TIMEOUT))
         )
     except TimeoutError:
         return {"error": "no answer (mower asleep or out of range?)"}
@@ -108,6 +104,11 @@ def _mower_diagnostics(
         "return_pending": api.return_pending,
         "task_pending": api.task_pending,
         "message_counts": dict(api.message_counts),
+        "robot_status_read": (
+            coordinator.robot_status_time.isoformat()
+            if coordinator.robot_status_time
+            else None
+        ),
         "probes": probes,
         "areas": api.areas,
         "status": async_redact_data(status_dict, TO_REDACT),
