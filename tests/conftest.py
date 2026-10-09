@@ -58,6 +58,43 @@ DEVICE_STATUS = {
 }
 
 
+# Data points a RockNeo Q105 lists in its product schema (fw 02.72.44): no
+# 128 dock_state, 130 pend_type, 131, 136, 137, 140 blade_lifespan, 141.
+Q105_SCHEMA = [
+    {"id": str(code), "name": name, "code": name, "mode": mode, "type": "VALUE"}
+    for code, name, mode in (
+        (101, "rpc_request", "rw"),
+        (102, "rpc_response", "rw"),
+        (103, "dps_report", "ro"),
+        (120, "error_code", "ro"),
+        (121, "battery", "ro"),
+        (122, "mow_type", "ro"),
+        (123, "mow_state", "ro"),
+        (124, "mapping_type", "ro"),
+        (125, "mapping_state", "ro"),
+        (126, "ota_state", "ro"),
+        (127, "charge_state", "ro"),
+        (129, "charge_type", "ro"),
+        (132, "mow_start_type", "ro"),
+        (133, "mow_eff_mode", "rw"),
+        (134, "mow_height", "rw"),
+        (135, "mow_direction_angle", "rw"),
+        (138, "offline_status", "ro"),
+        (139, "mow_progress", "ro"),
+        (142, "gps_coordinate", "ro"),
+        (143, "off_dock_no_task_status", "ro"),
+        (144, "afs_status", "ro"),
+        (145, "network_channel", "ro"),
+        (201, "start", "wo"),
+        (202, "dock", "wo"),
+        (203, "pause", "wo"),
+        (204, "resume", "wo"),
+        (205, "stop", "wo"),
+        (206, "auth_status", "ro"),
+    )
+]
+
+
 def make_home_data(
     device_status: dict[str, Any] | None = None, *, with_mower: bool = True
 ) -> HomeData:
@@ -87,15 +124,7 @@ def make_home_data(
                 "name": "RockNeo Q105",
                 "model": "roborock.mower.a222",
                 "category": "roborock.mower",
-                "schema": [
-                    {
-                        "id": "121",
-                        "name": "battery",
-                        "code": "battery",
-                        "mode": "ro",
-                        "type": "VALUE",
-                    }
-                ],
+                "schema": Q105_SCHEMA,
             }
         )
         devices.append(

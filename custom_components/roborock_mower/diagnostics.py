@@ -24,7 +24,7 @@ from homeassistant.loader import async_get_integration
 from .const import CONF_BASE_URL, DOMAIN
 from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
 from .mower_api import DPS_GPS_COORDINATE, derive_activity, redact_dps
-from .robot_status import redact_private
+from .robot_status import redact_private, shorten_long_strings
 from .vendor import ROBOROCK_VERSION
 
 TO_REDACT = {"gps_coordinate", "local_key", "sn", "duid", "lat", "lon"}
@@ -40,20 +40,9 @@ PROBE_QUERIES = (
 PROBE_TIMEOUT = 8
 
 
-def _shorten(value: Any) -> Any:
-    """Replace very long strings (raw map data) by their length."""
-    if isinstance(value, dict):
-        return {key: _shorten(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_shorten(item) for item in value]
-    if isinstance(value, str) and len(value) > 2000:
-        return f"<{len(value)} characters>"
-    return value
-
-
 async def _probe(api: Any, query_type: str) -> Any:
     try:
-        return _shorten(
+        return shorten_long_strings(
             redact_private(await asyncio.wait_for(api.query(query_type), PROBE_TIMEOUT))
         )
     except TimeoutError:

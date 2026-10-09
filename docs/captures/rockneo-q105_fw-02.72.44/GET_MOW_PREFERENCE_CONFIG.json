@@ -1,0 +1,30 @@
+{
+  "type": "MOW_PREFERENCE_CONFIG",
+  "preference_config": {
+    "global": {
+      "mow_times": 1,
+      "effective": "DAILY",
+      "direction": 90,
+      "keep_edge": 1,
+      "mode": "GLOBAL",
+      "direction_type": "AUTO_DEFLECTION",
+      "boundary_perception": "INTELLIGENCE",
+      "rotation_angle": 15
+    },
+    "custom": [
+      {
+        "mow_times": 1,
+        "effective": "DAILY",
+        "direction": 90,
+        "keep_edge": 1,
+        "area_name": "Garten",
+        "area_id": 2,
+        "mode": "GLOBAL",
+        "direction_type": "AUTO_DEFLECTION",
+        "boundary_perception": "INTELLIGENCE",
+        "rotation_angle": 15
+      }
+    ],
+    "mode": "GLOBAL"
+  }
+}

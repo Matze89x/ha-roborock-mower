@@ -37,14 +37,15 @@ Was sich in welcher Version geändert hat, steht in den
   Durchgänge, Hinderniserkennung, Kantenschneider …) sind ebenfalls unter
   **Diagnose** vorhanden, aber standardmäßig deaktiviert. Der Mäher wird dafür
   selbst gefragt (lokal oder über MQTT, nicht über die begrenzte Cloud-Schnittstelle):
-  jede Minute beim Mähen, sonst alle 10 Minuten und sofort nach einer Statusänderung.
+  jede Minute beim Mähen, sonst alle 30 Minuten und sofort nach einer Statusänderung.
 - **Schnitthöhe** (Zahl) und **Effizienzmodus** (Auswahl: Täglich / Effizient / Feinschnitt)
 - **Zone mähen: …** (eine Taste pro gespeicherter Zone) – startet das Zonenmähen
 - **Routinen** aus der Roborock-App erscheinen als Tasten
 - **Aktionen** `roborock_mower.mow_areas` (Zonen mähen),
   `roborock_mower.list_areas` (Zonen auflisten), `roborock_mower.query`
   (reine Lese-Abfrage an den Mäher, z. B. `GET_ROBOT_STATUS`, zum Finden neuer Werte)
-  und `roborock_mower.scan_queries` (probiert viele Lese-Abfragen nacheinander aus)
+  und `roborock_mower.scan_queries` (holt die Abfragenamen aus der offiziellen
+  Roborock-App-Erweiterung und probiert sie nacheinander am Mäher aus)
 - **Datenschutz:** GPS-Position, MAC- und IP-Adressen sowie der WLAN-Name des Mähers
   werden in Diagnose, Abfrage-Antworten und Logs geschwärzt
 
@@ -104,6 +105,13 @@ kopieren und Home Assistant neu starten.
    hunderte MB. Warnungen „Unmapped mower mow_state …“ oder „Unknown … value“
    bitte immer mitschicken.
 
+## Daten für alle
+
+Bereinigte echte Antworten des Mähers (ohne Position und Netzwerkdaten) liegen
+öffentlich unter [`docs/`](docs/) – zum freien Verwenden, z. B. für eigene
+Integrationen. Wer ein anderes Modell oder eine andere Firmware hat, kann seine
+Daten über das Issue-Formular **„Mäher-Daten teilen“** beisteuern.
+
 ## Karte
 
 Die Rasen-/Zonenkarte wird (noch) nicht als Bild dargestellt: Die App lädt sie als
@@ -160,15 +168,15 @@ What changed in which version is listed in the
   system states, map, mowing preferences such as direction and passes, obstacle
   avoidance, edge trimmer, …) are under **Diagnostic** too, disabled by default.
   They are asked from the mower itself (locally or via MQTT, never the
-  rate-limited cloud API): every minute while mowing, otherwise every 10 minutes
+  rate-limited cloud API): every minute while mowing, otherwise every 30 minutes
   and right after a state change.
 - **Mow Height** (number) and **Efficiency Mode** (select: Daily / Efficient / Manicure)
 - **Mow zone: …** – one button per saved area starts a zone mow
 - **Routines** from the Roborock app appear as buttons
 - **Actions** `roborock_mower.mow_areas`, `roborock_mower.list_areas`,
   `roborock_mower.query` (read-only query to the mower, e.g. `GET_ROBOT_STATUS`,
-  to discover new values) and `roborock_mower.scan_queries` (tries many read-only
-  queries one after another)
+  to discover new values) and `roborock_mower.scan_queries` (takes the request
+  names from the official Roborock app plugin and tries them one by one, read-only)
 - **Privacy:** the mower's GPS position, MAC and IP addresses and Wi-Fi name are
   redacted in diagnostics, query answers and logs
 
@@ -224,6 +232,13 @@ restart Home Assistant.
    The bundled library deliberately stays at INFO, otherwise the log grows by
    hundreds of MB. Always include "Unmapped mower mow_state …" or "Unknown …
    value" warnings.
+
+## Data for everyone
+
+Cleaned-up real answers of the mower (no position or network data) are public
+in [`docs/`](docs/), free to use, e.g. for other integrations. Owners of other
+models or firmware can contribute theirs with the **"Share mower data"** issue
+form.
 
 ## Map
 

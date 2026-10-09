@@ -258,6 +258,13 @@
           "no_solution": "Keine Position"
         }
       },
+      "hardware_error": {
+        "name": "Hardware-Fehler",
+        "state": {
+          "none": "Keiner",
+          "main_cutter_driver_ic_fault": "Störung Treiber Mähmotor"
+        }
+      },
       "wifi_quality": {
         "name": "WLAN-Qualität",
         "state": {
@@ -320,7 +327,8 @@
         "state": {
           "sleep": "Ruhezustand",
           "awake": "Wach",
-          "normal": "Normal"
+          "normal": "Normal",
+          "prepare": "Bereitet vor"
         }
       },
       "runtime_state": {
@@ -372,7 +380,8 @@
         "name": "Steuerungszustand",
         "state": {
           "mcu_low_power": "Energiesparmodus",
-          "mcu_normal": "Normal"
+          "mcu_normal": "Normal",
+          "run": "Läuft"
         }
       },
       "map_name": {
@@ -490,15 +499,19 @@
     },
     "scan_queries": {
       "name": "Mäher-Abfragen durchsuchen",
-      "description": "Probiert nacheinander eine Liste reiner Lese-Abfragen (GET_*) am Mäher aus und gibt zurück, welche er beantwortet. Hilft, Daten zu finden, die die Integration noch nicht anzeigt, z. B. Messerverschleiß oder Mähstatistiken. Bewegt den Mäher nie und ändert keine Einstellungen; dauert bis zu einigen Minuten.",
+      "description": "Stellt dem Mäher nacheinander reine Lese-Abfragen (GET_*) und gibt zurück, welche er beantwortet. Standardmäßig werden die Abfragenamen aus der offiziellen Roborock-App-Erweiterung genommen, die – wie von der App – mit deinem eigenen Konto geladen wird; sonst wird eine kurze eingebaute Liste probiert. Hilft, Daten zu finden, die die Integration noch nicht anzeigt, z. B. Zeitpläne, Messerverschleiß oder Mähstatistiken. Bewegt den Mäher nie und ändert keine Einstellungen; kann einige Minuten dauern.",
       "fields": {
         "device_id": {
           "name": "Mähroboter",
           "description": "Der/die zu durchsuchende(n) Roborock-Mähroboter."
         },
+        "from_app": {
+          "name": "Namen aus der Roborock-App",
+          "description": "Abfragenamen aus der offiziellen App-Erweiterung nehmen (empfohlen). Wird ignoriert, wenn unten Abfragen angegeben sind."
+        },
         "query_types": {
           "name": "Abfragen",
-          "description": "Optionale Liste von Abfragenamen (jeweils mit GET_ beginnend). Ohne Angabe wird eine eingebaute Liste wahrscheinlicher Namen probiert."
+          "description": "Optionale Liste von Abfragenamen (jeweils mit GET_ beginnend)."
         }
       }
     }

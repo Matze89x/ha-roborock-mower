@@ -1,0 +1,12 @@
+{
+  "type": "MAP_NAMES",
+  "map_names": [
+    "APP_MAP1.bin"
+  ],
+  "map_abstracts": [
+    {
+      "name": "APP_MAP1.bin",
+      "file_change_time": "2026-10-09-08-15-21"
+    }
+  ]
+}

@@ -3,6 +3,50 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.2.1 – Real query names, hardware errors, open data
+
+**Kurzfassung (Deutsch):** Die Aktion „Mäher-Abfragen durchsuchen“ rät nicht
+mehr: Sie lädt – wie die Roborock-App – mit deinem eigenen Konto die offizielle
+App-Erweiterung für deinen Mäher, liest daraus alle Abfragenamen (`GET_*`) und
+fragt den Mäher genau diese. So finden wir Zeitpläne, Verschleißteile und
+Statistik. Neu ist der Diagnose-Sensor **Hardware-Fehler**: Er zeigt Fehler der
+Steuerung an (z. B. `MAIN_CUTTER_DRIVER_IC_FAULT`, Störung des Mähmotor-Treibers),
+sonst „Keiner“. Sensoren für Datenpunkte, die dein Modell laut Roborock gar nicht
+hat (beim Q105: Messer-Lebensdauer, Pausengrund), werden nicht mehr angelegt und
+alte, immer leere Einträge entfernt. Im Ruhezustand wird der Mäher nur noch alle
+30 statt 10 Minuten gefragt (beim Start und Ende einer Fahrt weiterhin sofort).
+Bereinigte echte Mäher-Antworten liegen jetzt öffentlich unter `docs/`, und es
+gibt Issue-Formulare zum Teilen von Daten und Melden von Fehlern.
+
+### New
+
+- **`scan_queries` reads the request names from the official app plugin**
+  (option "Names from the Roborock app", on by default): it downloads the
+  product plugin and the mower category plugin with the user's own account,
+  collects every `GET_*` name and asks the mower each one, one at a time. The
+  answer now lists `answered`, `rejected` (the mower's `["fail"]`) and
+  `failed` separately, says where the names came from (`source`) and what went
+  wrong while reading the plugin (`app_errors`, without links). Without the
+  plugin the built-in list is used. Long strings in answers are shortened.
+- **Diagnostic sensor "Hardware error"** from `hardware.mcu_error.errors`
+  (first error as state, all of them as the `errors` attribute; "None" when
+  the controller reports none).
+- **Open data:** cleaned-up captures of a RockNeo Q105 (firmware 02.72.44) in
+  `docs/captures/`: `GET_ROBOT_STATUS`, `GET_ROBOT_INFO`,
+  `GET_MOW_PREFERENCE_CONFIG`, `GET_MAP_NAMES`, `GET_HEIGHT_MOTOR_PARAMETER`, the
+  product schema with translated data point names, and the query scan. Issue
+  forms "Share mower data" and "Report a bug".
+- Translations for the states `run` (controller) and `prepare` (energy).
+
+### Changes
+
+- Data point sensors (and the cutting height) are only created when the
+  model's product schema lists the data point; entities of earlier versions
+  that this model can never fill are removed (Q105: blade lifespan, pause
+  reason).
+- The full status is read every 30 minutes while idle (was 10); every minute
+  during a run and right after state changes as before.
+
 ## 0.2.0 – Information from the mower
 
 **Kurzfassung (Deutsch):** Die Integration fragt den Mäher jetzt selbst nach

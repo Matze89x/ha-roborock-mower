@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "Daten & Protokoll / Data & protocol"
+    url: https://github.com/Matze89x/ha-roborock-mower/tree/main/docs
+    about: "Bereinigte Mäher-Antworten und Protokollbeschreibung / Cleaned-up mower answers and protocol notes"

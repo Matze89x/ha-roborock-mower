@@ -67,6 +67,17 @@ def redact_private(value: Any) -> Any:
     return value
 
 
+def shorten_long_strings(value: Any, limit: int = 2000) -> Any:
+    """Copy of ``value`` with very long strings (raw map data) as their length."""
+    if isinstance(value, dict):
+        return {key: shorten_long_strings(item, limit) for key, item in value.items()}
+    if isinstance(value, list):
+        return [shorten_long_strings(item, limit) for item in value]
+    if isinstance(value, str) and len(value) > limit:
+        return f"<{len(value)} characters>"
+    return value
+
+
 def dig(data: Any, *path: str | int) -> Any:
     """``data[path[0]][path[1]]...`` or None when any step is missing."""
     for step in path:

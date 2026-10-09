@@ -1,0 +1,51 @@
+name: "Mäher-Daten teilen / Share mower data"
+description: "Antworten deines Mähers beisteuern (andere Modelle, neue Firmware) / Contribute your mower's answers"
+title: "[Daten/Data] <Modell/model> <Firmware>"
+labels: ["mower data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke! Die Daten landen bereinigt unter `docs/captures/`, damit alle sie nutzen können.
+        Thanks! Cleaned-up data goes to `docs/captures/` for everyone to use.
+
+        **Datenschutz / Privacy:** Die Integration entfernt GPS-Position, MAC/IP-Adressen und
+        WLAN-Namen automatisch. Bitte trotzdem kurz drüberschauen. The integration removes
+        position and network data automatically; please glance over it anyway.
+  - type: input
+    id: model
+    attributes:
+      label: "Modell / Model"
+      placeholder: "RockNeo Q105 (roborock.mower.a222)"
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: "Firmware"
+      placeholder: "02.72.44"
+    validations:
+      required: true
+  - type: input
+    id: integration
+    attributes:
+      label: "Version der Integration / Integration version"
+      placeholder: "0.2.1"
+  - type: textarea
+    id: scan
+    attributes:
+      label: "Antwort von roborock_mower.scan_queries / Response of roborock_mower.scan_queries"
+      description: "Entwicklerwerkzeuge → Aktionen / Developer tools → Actions"
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: "Diagnose / Diagnostics"
+      description: "JSON-Datei hier hineinziehen oder einfügen / Drag the JSON file here or paste it"
+  - type: textarea
+    id: notes
+    attributes:
+      label: "Was der Mäher gerade tat / What the mower was doing"
+      placeholder: "angedockt, mäht, Regenpause … / docked, mowing, rain pause …"
