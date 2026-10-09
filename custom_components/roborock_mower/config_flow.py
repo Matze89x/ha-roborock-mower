@@ -3,20 +3,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
-from roborock.exceptions import (
-    RoborockAccountDoesNotExist,
-    RoborockException,
-    RoborockInvalidCode,
-    RoborockInvalidEmail,
-    RoborockTooFrequentCodeRequests,
-    RoborockUrlException,
-)
-from roborock.web_api import RoborockApiClient
 import voluptuous as vol
-
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
@@ -32,6 +23,15 @@ from .const import (
     DOMAIN,
     REGION_OPTIONS,
 )
+from .vendor.roborock.exceptions import (
+    RoborockAccountDoesNotExist,
+    RoborockException,
+    RoborockInvalidCode,
+    RoborockInvalidEmail,
+    RoborockTooFrequentCodeRequests,
+    RoborockUrlException,
+)
+from .vendor.roborock.web_api import RoborockApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ class RoborockMowerFlowHandler(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._username: str | None = None
+        self._base_url: str | None = None
         self._client: RoborockApiClient | None = None
 
     async def async_step_user(
@@ -85,6 +86,35 @@ class RoborockMowerFlowHandler(ConfigFlow, domain=DOMAIN):
                     ),
                 }
             ),
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Start re-authentication when the stored login stopped working."""
+        self._username = entry_data[CONF_USERNAME]
+        self._base_url = entry_data.get(CONF_BASE_URL)
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm re-authentication and send a new verification code."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            assert self._username
+            self._client = RoborockApiClient(
+                self._username,
+                base_url=self._base_url,
+                session=async_get_clientsession(self.hass),
+            )
+            errors = await self._request_code()
+            if not errors:
+                return await self.async_step_code()
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            description_placeholders={"username": self._username or ""},
             errors=errors,
         )
 
@@ -134,17 +164,20 @@ class RoborockMowerFlowHandler(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 await self.async_set_unique_id(user_data.rruid)
+                data = {
+                    CONF_USERNAME: self._username,
+                    CONF_USER_DATA: user_data.as_dict(),
+                    CONF_BASE_URL: await self._client.base_url,
+                }
+                if self.source == SOURCE_REAUTH:
+                    self._abort_if_unique_id_mismatch(reason="wrong_account")
+                    return self.async_update_reload_and_abort(
+                        self._get_reauth_entry(), data_updates=data
+                    )
                 self._abort_if_unique_id_configured(
                     error="already_configured_account"
                 )
-                return self.async_create_entry(
-                    title=self._username,
-                    data={
-                        CONF_USERNAME: self._username,
-                        CONF_USER_DATA: user_data.as_dict(),
-                        CONF_BASE_URL: await self._client.base_url,
-                    },
-                )
+                return self.async_create_entry(title=self._username, data=data)
 
         return self.async_show_form(
             step_id="code",

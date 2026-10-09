@@ -1,0 +1,6 @@
+# Home Assistant 2026.10.0 test harness (needs Python 3.14).
+pytest-homeassistant-custom-component==0.13.371
+# The official Roborock integration's library, for the coexistence tests. The
+# integration itself uses its bundled copy in custom_components/roborock_mower/vendor.
+python-roborock==7.12.0
+vacuum-map-parser-roborock==0.1.5

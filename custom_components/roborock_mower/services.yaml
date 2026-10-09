@@ -1,42 +1,31 @@
 mow_areas:
-  name: Mow areas
-  description: >-
-    Start a select-area (zone) mow on a Roborock mower. Sends the app's
-    MOW_SELECT command with the chosen saved-map boundaries. Use the
-    "List areas" service (or the Roborock app) to find the area ids.
-  target:
-    device:
-      integration: roborock_mower
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: roborock_mower
+          multiple: true
     area_ids:
-      name: Area ids
-      description: One or more saved boundary/zone ids to mow.
       required: true
       example: "[1, 2]"
       selector:
         object:
     area_names:
-      name: Area names
-      description: >-
-        Optional names matching each area id (same order). Cosmetic; the
-        mower resolves areas by id.
       required: false
       example: '["Front lawn", "Back lawn"]'
       selector:
         object:
 
 list_areas:
-  name: List areas
-  description: >-
-    Return the mower's saved map boundaries/zones (best effort). Experimental:
-    depends on the device returning a decodable map over the cloud API.
-  target:
-    device:
-      integration: roborock_mower
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: roborock_mower
+          multiple: true
     map_name:
-      name: Map name
-      description: Optional saved-map name to query (defaults to the active map).
       required: false
       example: "APP_MAP1"
       selector:

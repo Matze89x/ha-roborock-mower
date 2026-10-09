@@ -9,12 +9,10 @@ from homeassistant.components.lawn_mower import (
     LawnMowerEntity,
     LawnMowerEntityFeature,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import RoborockMowerCoordinator
+from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
 from .entity import RoborockMowerEntity
 from .mower_api import (
     MOW_STATES_DOCKED,
@@ -36,6 +34,9 @@ _RETURNING = getattr(LawnMowerActivity, "RETURNING", LawnMowerActivity.MOWING)
 _OFF_DOCK_DOCKING = 3
 # dock_state (DP 128) DockStateDpValue: 1 MOVING_TO_TARGET, 2 DOCKING.
 _DOCK_STATE_RETURNING = frozenset({1, 2})
+
+# Unmapped mow_state codes already reported (warn once per code, not per write).
+_REPORTED_UNMAPPED: set[int] = set()
 
 
 def _derive_activity(
@@ -63,18 +64,25 @@ def _derive_activity(
             return _RETURNING
         return LawnMowerActivity.DOCKED
     # Unknown non-idle code: treat as active and log so it can be mapped later.
-    _LOGGER.warning("Unmapped mower mow_state %s; treating as mowing", mow_state)
+    if mow_state not in _REPORTED_UNMAPPED:
+        _REPORTED_UNMAPPED.add(mow_state)
+        _LOGGER.warning(
+            "Unmapped mower mow_state %s; treating as mowing. Please report it "
+            "together with the integration diagnostics",
+            mow_state,
+        )
     return LawnMowerActivity.MOWING
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: MowerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Roborock mower lawn_mower entities."""
-    coordinators: list[RoborockMowerCoordinator] = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(RoborockLawnMowerEntity(coord) for coord in coordinators)
+    async_add_entities(
+        RoborockLawnMowerEntity(coord) for coord in entry.runtime_data.coordinators
+    )
 
 
 class RoborockLawnMowerEntity(RoborockMowerEntity, LawnMowerEntity):
@@ -105,13 +113,14 @@ class RoborockLawnMowerEntity(RoborockMowerEntity, LawnMowerEntity):
     # coordinator). The push updates the coordinator and hence these entities.
 
     async def async_start_mowing(self) -> None:
+        api = self.coordinator.mower_api
         if self.status.mow_state in MOW_STATES_PAUSED:
-            await self.coordinator.mower_api.resume()
+            await self._async_send("Resume", api.resume)
         else:
-            await self.coordinator.mower_api.start()
+            await self._async_send("Start mowing", api.start)
 
     async def async_pause(self) -> None:
-        await self.coordinator.mower_api.pause()
+        await self._async_send("Pause", self.coordinator.mower_api.pause)
 
     async def async_dock(self) -> None:
-        await self.coordinator.mower_api.dock()
+        await self._async_send("Return to dock", self.coordinator.mower_api.dock)

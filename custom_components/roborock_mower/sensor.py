@@ -12,13 +12,11 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import RoborockMowerCoordinator
+from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
 from .entity import RoborockMowerEntity
 from .mower_api import (
     CHARGE_STATE_LABELS,
@@ -113,16 +111,15 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: MowerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Roborock mower sensor entities."""
-    coordinators: list[RoborockMowerCoordinator] = hass.data[DOMAIN][entry.entry_id]
-    entities: list[RoborockMowerSensorEntity] = []
-    for coord in coordinators:
-        for desc in SENSOR_DESCRIPTIONS:
-            entities.append(RoborockMowerSensorEntity(coord, desc))
-    async_add_entities(entities)
+    async_add_entities(
+        RoborockMowerSensorEntity(coord, desc)
+        for coord in entry.runtime_data.coordinators
+        for desc in SENSOR_DESCRIPTIONS
+    )
 
 
 class RoborockMowerSensorEntity(RoborockMowerEntity, SensorEntity):

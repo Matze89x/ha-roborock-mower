@@ -23,12 +23,24 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from roborock.data import RoborockCategory
-from roborock.data.containers import HomeDataProduct, HomeDataScene
-from roborock.devices.rpc.v1_channel import V1Channel
-from roborock.exceptions import RoborockException
-from roborock.roborock_message import RoborockMessage, RoborockMessageProtocol
-from roborock.web_api import UserWebApiClient
+try:
+    # The integration's own bundled copy of python-roborock (see vendor/).
+    from .vendor.roborock.data import RoborockCategory
+    from .vendor.roborock.data.containers import HomeDataProduct, HomeDataScene
+    from .vendor.roborock.devices.rpc.v1_channel import V1Channel
+    from .vendor.roborock.exceptions import RoborockException
+    from .vendor.roborock.roborock_message import (
+        RoborockMessage,
+        RoborockMessageProtocol,
+    )
+    from .vendor.roborock.web_api import UserWebApiClient
+except ImportError:  # loaded standalone by the tools/ probe scripts
+    from roborock.data import RoborockCategory
+    from roborock.data.containers import HomeDataProduct, HomeDataScene
+    from roborock.devices.rpc.v1_channel import V1Channel
+    from roborock.exceptions import RoborockException
+    from roborock.roborock_message import RoborockMessage, RoborockMessageProtocol
+    from roborock.web_api import UserWebApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,9 +62,11 @@ DPS_MOW_EFF_MODE = 133
 DPS_MOW_HEIGHT = 134
 DPS_MOW_DIRECTION_ANGLE = 135
 DPS_MOW_PATTEN = 136
+DPS_MOW_CONF_MODE = 137
 DPS_OFFLINE_STATUS = 138
 DPS_MOW_PROGRESS = 139
 DPS_BLADE_LIFESPAN = 140
+DPS_FC_STATE = 141
 DPS_GPS_COORDINATE = 142
 DPS_OFF_DOCK_NO_TASK_STATUS = 143
 DPS_AFS_STATUS = 144
@@ -114,6 +128,10 @@ BUTTON_DOCK_END = "DOCK_END"  # cancel an in-progress return-to-dock
 EFF_MODE_LABELS: dict[int, str] = {1: "Daily", 2: "Efficient", 3: "Manicure"}
 EFF_MODE_REVERSE: dict[str, int] = {v: k for k, v in EFF_MODE_LABELS.items()}
 EFF_MODE_WIRE: dict[int, str] = {1: "DAILY", 2: "EFFICIENT", 3: "MANICURE"}
+
+# remote_pb answers a command with ["ok"] when the mower acts and ["fail"] when
+# it rejects it (e.g. start while the lid is open or the mower is off the map).
+_REJECTED_RESULT = "fail"
 
 # python-roborock's V1 decoder only passes through an "ok"/dict/list/int RPC
 # result; the mower answers GET_* queries with a JSON *string*, which the
@@ -258,9 +276,11 @@ class MowerStatus:
     mow_height: int | None = None
     mow_direction_angle: int | None = None
     mow_patten: int | None = None
+    mow_conf_mode: int | None = None
     offline_status: Any = None
     mow_progress: int | None = None
     blade_lifespan: int | None = None
+    fc_state: int | None = None
     gps_coordinate: Any = None
     off_dock_no_task_status: int | None = None
     afs_status: int | None = None
@@ -288,9 +308,11 @@ class MowerStatus:
             mow_height=dps.get(DPS_MOW_HEIGHT),
             mow_direction_angle=dps.get(DPS_MOW_DIRECTION_ANGLE),
             mow_patten=dps.get(DPS_MOW_PATTEN),
+            mow_conf_mode=dps.get(DPS_MOW_CONF_MODE),
             offline_status=dps.get(DPS_OFFLINE_STATUS),
             mow_progress=dps.get(DPS_MOW_PROGRESS),
             blade_lifespan=dps.get(DPS_BLADE_LIFESPAN),
+            fc_state=dps.get(DPS_FC_STATE),
             gps_coordinate=dps.get(DPS_GPS_COORDINATE),
             off_dock_no_task_status=dps.get(DPS_OFF_DOCK_NO_TASK_STATUS),
             afs_status=dps.get(DPS_AFS_STATUS),
@@ -349,6 +371,18 @@ def parse_dps_push(message: Any) -> dict[int, Any]:
     }
 
 
+def areas_from_preference_config(cfg: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Extract the saved areas ({id, name}) from a mowing preference config."""
+    areas: list[dict[str, Any]] = []
+    if isinstance(cfg, dict):
+        for custom in cfg.get("custom") or []:
+            if isinstance(custom, dict) and custom.get("area_id") is not None:
+                areas.append(
+                    {"id": custom["area_id"], "name": custom.get("area_name", "")}
+                )
+    return areas
+
+
 def _boundaries_payload(areas: list[dict[str, Any]]) -> dict[str, Any]:
     """Build a modify_map payload from selected areas ({id, name} each)."""
     return {
@@ -374,6 +408,19 @@ class MowerApi:
         self._web_api = web_api
         self._duid = duid
         self._dps: dict[int, Any] = coerce_dps(initial_dps)
+        # Push bookkeeping: lets the coordinator skip the rate-limited cloud
+        # poll while MQTT is demonstrably delivering, and feeds diagnostics.
+        self.push_count = 0
+        self.last_push_monotonic: float | None = None
+        self.online: bool | None = None
+
+    @property
+    def duid(self) -> str:
+        return self._duid
+
+    @property
+    def channel(self) -> V1Channel:
+        return self._channel
 
     @property
     def product(self) -> HomeDataProduct:
@@ -383,19 +430,32 @@ class MowerApi:
     def status(self) -> MowerStatus:
         return MowerStatus.from_dps(self._dps)
 
+    @property
+    def seconds_since_push(self) -> float | None:
+        """Seconds since the last live DPS push (None if none received yet)."""
+        if self.last_push_monotonic is None:
+            return None
+        return time.monotonic() - self.last_push_monotonic
+
     def apply_push(self, dps: dict[int, Any]) -> MowerStatus:
         """Merge a live DPS push into current state and return updated status."""
         self._dps.update(dps)
+        self.push_count += 1
+        self.last_push_monotonic = time.monotonic()
         return self.status
 
-    async def poll_status(self) -> MowerStatus:
-        """Refresh status from the cloud home_data device_status snapshot."""
-        home_data = await self._web_api.get_home_data()
+    def apply_home_data(self, home_data: Any) -> MowerStatus:
+        """Merge this mower's device_status from a home_data snapshot."""
         entry = home_data.device_products.get(self._duid)
         if entry is not None:
             device, _product = entry
             self._dps.update(coerce_dps(device.device_status))
+            self.online = getattr(device, "online", None)
         return self.status
+
+    async def poll_status(self) -> MowerStatus:
+        """Refresh status from the cloud home_data device_status snapshot."""
+        return self.apply_home_data(await self._web_api.get_home_data())
 
     # -- remote_pb transport ---------------------------------------------------
 
@@ -408,9 +468,18 @@ class MowerApi:
         """
         message = {"id": str(int(time.time() * 1000)), **payload}
         _LOGGER.debug("[%s] remote_pb %s", self._duid, payload.get("type"))
-        return await self._channel.rpc_channel.send_command(
+        result = await self._channel.rpc_channel.send_command(
             "remote_pb", params=message
         )
+        _LOGGER.debug("[%s] remote_pb %s -> %s", self._duid, payload.get("type"), result)
+        if result == _REJECTED_RESULT or (
+            isinstance(result, list) and _REJECTED_RESULT in result
+        ):
+            raise RoborockException(
+                f"Mower rejected {payload.get('type')} "
+                f"{payload.get('app_button') or ''}".strip()
+            )
+        return result
 
     async def _send_button(self, app_button: str, **extra: Any) -> Any:
         return await self._send_remote_msg(
@@ -575,18 +644,7 @@ class MowerApi:
         reliably. Feed an ``id`` to :meth:`start_area_mow` or the ``mow_areas``
         service.
         """
-        cfg = await self.get_mow_preference_config()
-        areas: list[dict[str, Any]] = []
-        if isinstance(cfg, dict):
-            for custom in cfg.get("custom") or []:
-                if isinstance(custom, dict) and custom.get("area_id") is not None:
-                    areas.append(
-                        {
-                            "id": custom["area_id"],
-                            "name": custom.get("area_name", ""),
-                        }
-                    )
-        return areas
+        return areas_from_preference_config(await self.get_mow_preference_config())
 
     async def get_map_names(self) -> list[str]:
         """Best-effort list of saved map names (empty if unavailable)."""

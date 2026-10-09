@@ -1,0 +1,335 @@
+from typing import Self, cast
+
+from ..code_mappings import RoborockEnum, RoborockModeEnum
+
+
+class WorkStatusMapping(RoborockModeEnum):
+    """Maps the general status of the robot."""
+
+    SLEEPING = ("sleeping", 0)
+    WAITING_FOR_ORDERS = ("waiting_for_orders", 1)
+    PAUSED = ("paused", 2)
+    DOCKING = ("docking", 3)
+    CHARGING = ("charging", 4)
+    SWEEP_MOPING = ("sweep_moping", 5)
+    SWEEP_MOPING_2 = ("sweep_moping_2", 6)
+    MOPING = ("moping", 7)
+    UPDATING = ("updating", 8)
+    MOP_CLEANING = ("mop_cleaning", 9)
+    MOP_AIRDRYING = ("mop_airdrying", 10)
+    WORKING_SLEEP = ("working_sleep", 11)
+    UNKNOWN = ("unknown", -1)
+
+    @classmethod
+    def from_code(cls, code: int) -> Self:
+        """Map unrecognized Q7 statuses to UNKNOWN without failing the response."""
+        try:
+            return super().from_code(code)
+        except ValueError:
+            return cast(Self, cls.UNKNOWN)
+
+
+class SCWindMapping(RoborockModeEnum):
+    """Maps suction power levels."""
+
+    SILENCE = ("quiet", 1)
+    STANDARD = ("balanced", 2)
+    STRONG = ("turbo", 3)
+    SUPER_STRONG = ("max", 4)
+    SUPER_STRONG_PLUS = ("max_plus", 5)
+
+
+class WaterLevelMapping(RoborockModeEnum):
+    """Maps water flow levels."""
+
+    LOW = ("low", 1)
+    MEDIUM = ("medium", 2)
+    HIGH = ("high", 3)
+
+
+class CleanTypeMapping(RoborockModeEnum):
+    """Maps the type of cleaning (Vacuum, Mop, or both)."""
+
+    VACUUM = ("vacuum", 0)
+    VAC_AND_MOP = ("vac_and_mop", 1)
+    MOP = ("mop", 2)
+
+
+class CleanRepeatMapping(RoborockModeEnum):
+    """Maps the cleaning repeat parameter."""
+
+    ONE = ("one", 0)
+    TWO = ("two", 1)
+
+
+class CleanPathPreferenceMapping(RoborockModeEnum):
+    """Maps the cleaning path preference parameter."""
+
+    BALANCED = ("balanced", 0)
+    DEEP = ("deep", 1)
+
+
+class SCDeviceCleanParam(RoborockModeEnum):
+    """Maps the control values for cleaning tasks."""
+
+    STOP = ("stop", 0)
+    START = ("start", 1)
+    PAUSE = ("pause", 2)
+
+
+class WorkModeMapping(RoborockModeEnum):
+    """Maps the detailed work modes of the robot."""
+
+    IDLE = ("idle", 0)
+    AUTO = ("auto", 1)
+    MANUAL = ("manual", 2)
+    AREA = ("area", 3)
+    AUTO_PAUSE = ("auto_pause", 4)
+    BACK_CHARGE = ("back_charge", 5)
+    POINT = ("point", 6)
+    NAVI = ("navi", 7)
+    AREA_PAUSE = ("area_pause", 8)
+    NAVI_PAUSE = ("navi_pause", 9)
+    GLOBAL_GO_HOME = ("global_go_home", 10)
+    GLOBAL_BROKEN = ("global_broken", 11)
+    NAVI_GO_HOME = ("navi_go_home", 12)
+    POINT_GO_HOME = ("point_go_home", 13)
+    NAVI_IDLE = ("navi_idle", 14)
+    SCREW = ("screw", 20)
+    SCREW_GO_HOME = ("screw_go_home", 21)
+    POINT_IDLE = ("point_idle", 22)
+    SCREW_IDLE = ("screw_idle", 23)
+    BORDER = ("border", 25)
+    BORDER_GO_HOME = ("border_go_home", 26)
+    BORDER_PAUSE = ("border_pause", 27)
+    BORDER_BROKEN = ("border_broken", 28)
+    BORDER_IDLE = ("border_idle", 29)
+    PLAN_AREA = ("plan_area", 30)
+    PLAN_AREA_PAUSE = ("plan_area_pause", 31)
+    PLAN_AREA_GO_HOME = ("plan_area_go_home", 32)
+    PLAN_AREA_BROKEN = ("plan_area_broken", 33)
+    PLAN_AREA_IDLE = ("plan_area_idle", 35)
+    MOPPING = ("mopping", 36)
+    MOPPING_PAUSE = ("mopping_pause", 37)
+    MOPPING_GO_HOME = ("mopping_go_home", 38)
+    MOPPING_BROKEN = ("mopping_broken", 39)
+    MOPPING_IDLE = ("mopping_idle", 40)
+    EXPLORING = ("exploring", 45)
+    EXPLORE_PAUSE = ("explore_pause", 46)
+    EXPLORE_GO_HOME = ("explore_go_home", 47)
+    EXPLORE_BROKEN = ("explore_broken", 48)
+    EXPLORE_IDLE = ("explore_idle", 49)
+
+
+class StationStateMapping(RoborockEnum):
+    """Known dock activity states observed on the Q7 M5+."""
+
+    unknown = -1
+    idle = 0
+    collecting_dust = 3
+
+
+class DustCollectionStateMapping(RoborockEnum):
+    """Known dust collection states observed on the Q7 M5+."""
+
+    unknown = -1
+    idle = 0
+    collecting_dust = 1
+
+
+class StationActionMapping(RoborockModeEnum):
+    """Maps actions for the cleaning/drying station."""
+
+    STOP_CLEAN_OR_AIRDRY = ("stop_clean_or_airdry", 0)
+    MOP_CLEAN = ("mop_clean", 1)
+    MOP_AIRDRY = ("mop_airdry", 2)
+
+
+class CleanTaskTypeMapping(RoborockModeEnum):
+    """Maps the high-level type of cleaning task selected."""
+
+    ALL = ("full", 0)
+    ROOM = ("room", 1)
+    AREA = ("zones", 4)
+    ROOM_NORMAL = ("room_normal", 5)
+    CUSTOM_MODE = ("customize", 6)
+    ALL_CUSTOM = ("all_custom", 11)
+    AREA_CUSTOM = ("area_custom", 99)
+
+
+class CarpetModeMapping(RoborockModeEnum):
+    """Maps carpet handling parameters."""
+
+    FOLLOW_GLOBAL = ("follow_global", 0)
+    ON = ("on", 1)
+    OFF = ("off", 2)
+
+
+class B01Fault(RoborockModeEnum):
+    """B01 fault codes and their descriptions."""
+
+    F_0 = ("fault_0", 0)
+    F_407 = ("cleaning_in_progress", 407)  # Cleaning in progress. Scheduled cleanup ignored.
+    F_500 = (
+        "lidar_blocked",
+        500,
+    )  # LiDAR turret or laser blocked. Check for obstruction and retry. LiDAR sensor obstructed or stuck.
+    # Remove foreign objects if any. If the problem persists, move the robot away and restart.
+    F_501 = (
+        "robot_suspended",
+        501,
+    )  # Robot suspended. Move the robot away and restart. Cliff sensors dirty. Wipe them clean.
+    F_502 = (
+        "low_battery",
+        502,
+    )  # Low battery. Recharge now. Battery low. Put the robot on the dock to charge it to 20% before starting.
+    F_503 = (
+        "dustbin_not_installed",
+        503,
+    )  # Check that the dustbin and filter are installed properly. Reinstall the dustbin and filter in place.
+    # If the problem persists, replace the filter.
+    F_504 = ("fault_504", 504)
+    F_505 = ("fault_505", 505)
+    F_506 = ("fault_506", 506)
+    F_507 = ("fault_507", 507)
+    F_508 = ("fault_508", 508)
+    F_509 = ("cliff_sensor_error", 509)  # Cliff sensors error. Clean them, move the robot away from drops, and restart.
+    F_510 = (
+        "bumper_stuck",
+        510,
+    )  # Bumper stuck. Clean it and lightly tap to release it. Tap it repeatedly to release it. If no foreign object
+    # exists, move the robot away and restart.
+    F_511 = (
+        "docking_error",
+        511,
+    )  # Docking error. Put the robot on the dock. Clear obstacles around the dock, clean charging contacts, and put
+    # the robot on the dock.
+    F_512 = (
+        "docking_error",
+        512,
+    )  # Docking error. Put the robot on the dock. Clear obstacles around the dock, clean charging contacts, and put
+    # the robot on the dock.
+    F_513 = (
+        "robot_trapped",
+        513,
+    )  # Robot trapped. Move the robot away and restart. Clear obstacles around robot or move robot away and restart.
+    F_514 = (
+        "robot_trapped",
+        514,
+    )  # Robot trapped. Move the robot away and restart. Clear obstacles around robot or move robot away and restart.
+    F_515 = ("fault_515", 515)
+    F_517 = ("fault_517", 517)
+    F_518 = (
+        "low_battery",
+        518,
+    )  # Low battery. Recharge now. Battery low. Put the robot on the dock to charge it to 20% before starting.
+    F_519 = ("fault_519", 519)
+    F_520 = ("fault_520", 520)
+    F_521 = ("fault_521", 521)
+    F_522 = ("mop_not_installed", 522)  # Check that the mop is properly installed. Mop not installed. Reinstall it.
+    F_523 = ("fault_523", 523)
+    F_525 = ("fault_525", 525)
+    F_526 = ("fault_526", 526)
+    F_527 = ("fault_527", 527)
+    F_528 = ("fault_528", 528)
+    F_529 = ("fault_529", 529)
+    F_530 = ("fault_530", 530)
+    F_531 = ("fault_531", 531)
+    F_532 = ("fault_532", 532)
+    F_533 = ("long_sleep", 533)  # About to shut down after a long time of sleep. Charge the robot.
+    F_534 = (
+        "low_battery_shutdown",
+        534,
+    )  # Low battery. Turning off. About to shut down due to low battery. Charge the robot.
+    F_535 = ("fault_535", 535)
+    F_536 = ("fault_536", 536)
+    F_540 = ("fault_540", 540)
+    F_541 = ("fault_541", 541)
+    F_542 = ("fault_542", 542)
+    F_550 = ("fault_550", 550)
+    F_551 = ("fault_551", 551)
+    F_559 = ("fault_559", 559)
+    F_560 = ("side_brush_entangled", 560)  # Side brush entangled. Remove and clean it.
+    F_561 = ("fault_561", 561)
+    F_562 = ("fault_562", 562)
+    F_563 = ("fault_563", 563)
+    F_564 = ("fault_564", 564)
+    F_565 = ("fault_565", 565)
+    F_566 = ("fault_566", 566)
+    F_567 = ("fault_567", 567)
+    F_568 = ("main_wheels_entangled", 568)  # Clean main wheels, move the robot away and restart.
+    F_569 = ("main_wheels_entangled", 569)  # Clean main wheels, move the robot away and restart.
+    F_570 = ("main_brush_entangled", 570)  # Main brush entangled. Remove and clean it and its bearing.
+    F_571 = ("fault_571", 571)
+    F_572 = ("main_brush_entangled", 572)  # Main brush entangled. Remove and clean it and its bearing.
+    F_573 = ("fault_573", 573)
+    F_574 = ("fault_574", 574)
+    F_580 = ("fault_580", 580)
+    F_581 = ("fault_581", 581)
+    F_582 = ("fault_582", 582)
+    F_583 = ("fault_583", 583)
+    F_584 = ("fault_584", 584)
+    F_585 = ("fault_585", 585)
+    F_586 = ("fault_586", 586)
+    F_587 = ("fault_587", 587)
+    F_588 = ("fault_588", 588)
+    F_589 = ("fault_589", 589)
+    F_590 = ("fault_590", 590)
+    F_591 = ("fault_591", 591)
+    F_592 = ("fault_592", 592)
+    F_593 = ("fault_593", 593)
+    F_594 = (
+        "dust_bag_not_installed",
+        594,
+    )  # Make sure the dust bag is properly installed. Dust bag not installed. Check that it is installed properly.
+    F_601 = ("fault_601", 601)
+    F_602 = ("fault_602", 602)
+    F_603 = ("fault_603", 603)
+    F_604 = ("fault_604", 604)
+    F_605 = ("fault_605", 605)
+    F_611 = ("positioning_failed", 611)  # Positioning failed. Move the robot back to the dock and remap.
+    F_612 = (
+        "map_changed",
+        612,
+    )  # Map changed. Positioning failed. Try again. New environment detected. Map changed. Positioning failed.
+    # Try again after remapping.
+    F_629 = ("mop_mount_fell_off", 629)  # Mop cloth mount fell off. Reinstall it to resume working.
+    F_668 = (
+        "system_error",
+        668,
+    )  # Robot error. Reset the system. Fan error. Reset the system. If the problem persists, contact customer service.
+    F_2000 = ("fault_2000", 2000)
+    F_2003 = ("low_battery_schedule_canceled", 2003)  # Battery level below 20%. Scheduled task canceled.
+    F_2007 = (
+        "cannot_reach_target",
+        2007,
+    )  # Unable to reach the target. Cleaning ended. Ensure the door to the target area is open or unobstructed.
+    F_2012 = (
+        "cannot_reach_target",
+        2012,
+    )  # Unable to reach the target. Cleaning ended. Ensure the door to the target area is open or unobstructed.
+    F_2013 = ("fault_2013", 2013)
+    F_2015 = ("fault_2015", 2015)
+    F_2017 = ("fault_2017", 2017)
+    F_2100 = (
+        "low_battery_resume_later",
+        2100,
+    )  # Low battery. Resume cleaning after recharging. Low battery. Starting to recharge. Resume cleaning after
+    # charging.
+    F_2101 = ("fault_2101", 2101)
+    F_2102 = ("cleaning_complete", 2102)  # Cleaning completed. Returning to the dock.
+    F_2103 = (
+        "cleaning_complete_docked",
+        2103,
+    )  # Task finished and robot docked. Follows 2102 once docking and any auto-empty complete; persists
+    # while docked-idle. Not an error (hw-confirmed on a Q7 M5+).
+    F_2104 = ("fault_2104", 2104)
+    F_2105 = ("fault_2105", 2105)
+    F_2108 = ("fault_2108", 2108)
+    F_2109 = ("fault_2109", 2109)
+    F_2110 = ("fault_2110", 2110)
+    F_2111 = ("fault_2111", 2111)
+    F_2112 = ("fault_2112", 2112)
+    F_2113 = ("fault_2113", 2113)
+    F_2114 = ("fault_2114", 2114)
+    F_2115 = ("fault_2115", 2115)

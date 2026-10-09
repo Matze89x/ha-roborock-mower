@@ -15,6 +15,10 @@
         "data": {
           "code": "Code"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Roborock account",
+        "description": "The login for {username} is no longer valid. Submit to receive a new verification code by e-mail."
       }
     },
     "error": {
@@ -29,7 +33,9 @@
       "no_mower_devices": "No mower devices found on this account"
     },
     "abort": {
-      "already_configured_account": "This account is already configured"
+      "already_configured_account": "This account is already configured",
+      "reauth_successful": "Re-authentication was successful",
+      "wrong_account": "This verification code belongs to a different Roborock account"
     }
   },
   "selector": {
@@ -101,22 +107,30 @@
   "services": {
     "mow_areas": {
       "name": "Mow areas",
-      "description": "Start a select-area (zone) mow using saved-map boundaries.",
+      "description": "Start a select-area (zone) mow using saved-map boundaries. Use the \"List areas\" action (or the Roborock app) to find the area ids.",
       "fields": {
+        "device_id": {
+          "name": "Mower",
+          "description": "The Roborock mower(s) to use."
+        },
         "area_ids": {
           "name": "Area ids",
           "description": "One or more saved boundary/zone ids to mow."
         },
         "area_names": {
           "name": "Area names",
-          "description": "Optional names matching each area id (same order)."
+          "description": "Optional names matching each area id (same order). Cosmetic; the mower resolves areas by id."
         }
       }
     },
     "list_areas": {
       "name": "List areas",
-      "description": "Return the mower's saved map boundaries/zones (best effort).",
+      "description": "Return the mower's saved areas, map names and map boundaries (best effort).",
       "fields": {
+        "device_id": {
+          "name": "Mower",
+          "description": "The Roborock mower(s) to query."
+        },
         "map_name": {
           "name": "Map name",
           "description": "Optional saved-map name to query (defaults to the active map)."
