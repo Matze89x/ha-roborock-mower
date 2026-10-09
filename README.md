@@ -9,6 +9,14 @@ Home-Assistant-Integration für **Roborock-Mähroboter** (RockNeo, z. B. Q105 /
 `roborock.mower.a222`) – läuft **parallel zur offiziellen Roborock-Integration**
 (für Staubsauger).
 
+> **Warum es diese Integration gibt:** Die offizielle Roborock-Integration von Home
+> Assistant unterstützt bisher nur Staubsauger, keine Mähroboter. Ich war aber darauf
+> angewiesen, meinen Mäher in Home Assistant zu haben – so ist dieses
+> **Hobbyprojekt** entstanden. Veröffentlicht ist es, damit auch andere es nutzen
+> können. Es bleibt bestehen, **bis die offizielle Roborock-Integration
+> Mähroboter unterstützt**; dann empfehle ich den Umstieg. Kein offizielles Produkt
+> von Roborock oder Home Assistant.
+
 > **Fork-Hinweis:** Dieses Projekt ist ein Fork von
 > [christiantroldmand/Roborock-mower-support-preview-57e0e10b](https://github.com/christiantroldmand/Roborock-mower-support-preview-57e0e10b)
 > und wird hier unter dem Namen **Roborock Mower** eigenständig weiterentwickelt.
@@ -173,6 +181,12 @@ Bereitgestellt wie besehen für die Community. Der mitgelieferte Ordner
 Home Assistant integration for **Roborock robotic mowers** (RockNeo, e.g. Q105 /
 `roborock.mower.a222`) that runs **side by side with the official Roborock
 integration** (vacuums).
+
+> **Why this integration exists:** Home Assistant's official Roborock integration
+> only supports vacuums so far, not mowers. I needed my mower in Home Assistant, so
+> this **hobby project** came about; it is public so others can use it too. It
+> stays around **until the official Roborock integration supports mowers**; then I
+> recommend switching to it. Not an official product of Roborock or Home Assistant.
 
 > **Fork notice:** this project is a fork of
 > [christiantroldmand/Roborock-mower-support-preview-57e0e10b](https://github.com/christiantroldmand/Roborock-mower-support-preview-57e0e10b)
