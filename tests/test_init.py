@@ -128,7 +128,13 @@ async def test_setup_and_unload(
     )
     assert hass.states.get(_entity_id(hass, "sensor", "battery")).state == "100"
     assert hass.states.get(_entity_id(hass, "number", "mow_height")).state == "40"
-    assert hass.states.get(_entity_id(hass, "select", "mow_eff_mode")).state == "Daily"
+    assert hass.states.get(_entity_id(hass, "select", "mow_eff_mode")).state == "daily"
+    # Translated enum sensors (labels are translation keys).
+    assert hass.states.get(_entity_id(hass, "sensor", "charge_state")).state == (
+        "charge_completed"
+    )
+    assert hass.states.get(_entity_id(hass, "sensor", "mow_state")).state == "idle"
+    assert hass.states.get(_entity_id(hass, "sensor", "error_code")).state == "0"
 
     # Only the mower becomes a device; the vacuum belongs to the core integration.
     devices = dr.async_entries_for_config_entry(
@@ -364,11 +370,17 @@ async def test_areas_and_routines_are_discovered_in_background(
     routines_mock.return_value = [HomeDataScene(id=7, name="Vorgarten")]
     await _setup(hass, config_entry)
 
-    area_select = hass.states.get(_entity_id(hass, "select", "mow_area"))
-    assert area_select.attributes["options"] == ["A1", "A2"]
+    for area_id in (2, 3):
+        assert er.async_get(hass).async_get_entity_id(
+            "button", DOMAIN, f"{MOWER_DUID}_mow_area_{area_id}"
+        )
     assert er.async_get(hass).async_get_entity_id(
         "button", DOMAIN, f"{MOWER_DUID}_routine_7"
     )
+    assert config_entry.runtime_data.coordinators[0].mower_api.areas == [
+        {"id": 2, "name": "A1"},
+        {"id": 3, "name": "A2"},
+    ]
 
 
 async def test_routine_fetch_failure_does_not_break_setup(
@@ -470,3 +482,115 @@ async def test_transient_empty_device_list_uses_previous_snapshot(
     await _setup(hass, config_entry)
     assert config_entry.state is ConfigEntryState.LOADED
     assert home_data_mock.await_count == 2
+
+
+async def test_returning_is_not_shown_as_docked(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """Field report: driving back after "return to dock" read as "docked"."""
+    await _setup(hass, config_entry)
+    mower = _entity_id(hass, "lawn_mower", "lawn_mower")
+    channel.callback(FakeMessage(b'{"dps":{"123":55,"127":0}}'))
+    await hass.async_block_till_done()
+    assert hass.states.get(mower).state == LawnMowerActivity.MOWING
+
+    await hass.services.async_call(
+        "lawn_mower", "dock", {"entity_id": mower}, blocking=True
+    )
+    # Task ends, mower drives back: idle task code, not charging yet.
+    channel.callback(FakeMessage(b'{"dps":{"123":0,"127":0}}'))
+    await hass.async_block_till_done()
+    assert hass.states.get(mower).state == LawnMowerActivity.RETURNING
+
+    channel.callback(FakeMessage(b'{"dps":{"127":3}}'))
+    await hass.async_block_till_done()
+    assert hass.states.get(mower).state == LawnMowerActivity.DOCKED
+
+
+async def test_stopped_in_garden_is_idle(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    await _setup(hass, config_entry)
+    channel.callback(FakeMessage(b'{"dps":{"123":0,"127":0}}'))
+    await hass.async_block_till_done()
+    assert hass.states.get(_entity_id(hass, "lawn_mower", "lawn_mower")).state == (
+        LawnMowerActivity.IDLE
+    )
+
+
+async def test_zone_button_starts_area_mow(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    async def _send(method: str, params: dict) -> object:
+        if params["type"] == "GET_MOW_PREFERENCE_CONFIG":
+            raise RoborockException(f"Unexpected API Result: {PREF_CONFIG_JSON}")
+        return ["ok"]
+
+    channel.rpc_channel.send_command.side_effect = _send
+    await _setup(hass, config_entry)
+    button = _entity_id(hass, "button", "mow_area_2")
+    assert hass.states.get(button).attributes["friendly_name"].endswith(
+        "Mow zone: A1"
+    )
+    await hass.services.async_call(
+        "button", "press", {"entity_id": button}, blocking=True
+    )
+    params = channel.rpc_channel.send_command.await_args.kwargs["params"]
+    assert params["app_button"] == "MOW_SELECT"
+    assert params["modify_map"] == {"boundaries": [{"id": 2, "name": "A1"}]}
+
+    # The edge cut uses the same saved areas, as the app does.
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": _entity_id(hass, "button", "edge_cut")},
+        blocking=True,
+    )
+    params = channel.rpc_channel.send_command.await_args.kwargs["params"]
+    assert params["app_button"] == "MOW_EDGE"
+    assert [b["id"] for b in params["modify_map"]["boundaries"]] == [2, 3]
+
+
+async def test_retired_area_select_is_removed(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    config_entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "select", DOMAIN, f"{MOWER_DUID}_mow_area", config_entry=config_entry
+    )
+    await _setup(hass, config_entry)
+    assert registry.async_get_entity_id("select", DOMAIN, f"{MOWER_DUID}_mow_area") is None
+
+
+async def test_bundled_library_logs_quietly() -> None:
+    import logging
+
+    assert (
+        logging.getLogger("custom_components.roborock_mower.vendor").level
+        == logging.INFO
+    )
+
+
+async def test_diagnostics_include_history(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    await _setup(hass, config_entry)
+    await hass.services.async_call(
+        "lawn_mower",
+        "pause",
+        {"entity_id": _entity_id(hass, "lawn_mower", "lawn_mower")},
+        blocking=True,
+    )
+    channel.callback(FakeMessage(b'{"dps":{"123":58,"142":"gps-secret"}}'))
+    await hass.async_block_till_done()
+    diag = await async_get_config_entry_diagnostics(hass, config_entry)
+    history = diag["mowers"][0]["history"]
+    # Last two entries: our pause command, then the mower's answer push.
+    assert [e["kind"] for e in history[-2:]] == ["command", "push"]
+    assert history[-2]["command"] == "APP_BUTTON MOW_PAUSE"
+    assert history[-2]["result"] == "['ok']"
+    assert history[-1]["dps"] == {"123": 58}
+    assert any(e.get("command") == "GET_MOW_PREFERENCE_CONFIG" for e in history)
+    assert "gps-secret" not in json.dumps(diag)
+    assert diag["mowers"][0]["activity"] == "paused"

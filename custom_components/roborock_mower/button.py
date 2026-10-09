@@ -1,21 +1,25 @@
 """Button platform for the Roborock mower.
 
-Exposes an Edge Cut button, a Stop button, a Cancel Dock button and one button
-per Roborock "routine" (scene) created in the app. Routines are triggered by id
-through the cloud and are a convenient way to run app-authored tasks (e.g. a
-saved zone mow) from Home Assistant.
+Exposes an Edge Cut button, a Stop button, a Cancel Dock button, one "mow
+zone" button per saved area and one button per Roborock "routine" (scene)
+created in the app. Routines are triggered by id through the cloud and are a
+convenient way to run app-authored tasks from Home Assistant.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .const import AREA_DISCOVERY_RETRY_DELAYS
 from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
 from .entity import RoborockMowerEntity
+from .mower_api import areas_from_preference_config
 from .vendor.roborock.data.containers import HomeDataScene
 from .vendor.roborock.exceptions import RoborockException
 
@@ -53,6 +57,40 @@ async def async_setup_entry(
 
     entry.async_create_background_task(
         hass, _add_routine_buttons(), f"{entry.domain}_routines"
+    )
+    for coordinator in coordinators:
+        entry.async_create_background_task(
+            hass,
+            _async_add_area_buttons(coordinator, async_add_entities),
+            f"{entry.domain}_areas_{coordinator.device.duid}",
+        )
+
+
+async def _async_add_area_buttons(
+    coordinator: RoborockMowerCoordinator, async_add_entities: AddEntitiesCallback
+) -> None:
+    """Add one "mow zone" button per saved area once the mower reports them.
+
+    The query goes to the mower itself, which is often asleep or out of Wi-Fi
+    range right after a restart, so this runs in the background with retries
+    instead of blocking (or failing) the platform setup.
+    """
+    api = coordinator.mower_api
+    for delay in AREA_DISCOVERY_RETRY_DELAYS:
+        if delay:
+            await asyncio.sleep(delay)
+        cfg = await api.get_mow_preference_config()
+        if cfg is None:
+            continue  # mower did not answer; try again later
+        api.areas = areas_from_preference_config(cfg)
+        async_add_entities(
+            RoborockAreaMowButton(coordinator, area) for area in api.areas
+        )
+        return
+    _LOGGER.info(
+        "[%s] Mower did not report its saved areas; the zone buttons will "
+        "appear after the next restart/reload while the mower is online",
+        coordinator.device.duid,
     )
 
 
@@ -99,6 +137,29 @@ class RoborockCancelDockButton(RoborockMowerEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self._async_send("Cancel dock", self.coordinator.mower_api.cancel_dock)
+
+
+class RoborockAreaMowButton(RoborockMowerEntity, ButtonEntity):
+    """Starts a select-area (zone) mow of one saved area (AppButton MOW_SELECT)."""
+
+    _attr_translation_key = "mow_area"
+    _attr_icon = "mdi:select-marker"
+
+    def __init__(
+        self, coordinator: RoborockMowerCoordinator, area: dict[str, Any]
+    ) -> None:
+        super().__init__(coordinator)
+        self._area = {"id": area["id"], "name": area.get("name", "")}
+        self._attr_translation_placeholders = {
+            "area": str(area.get("name") or area["id"])
+        }
+        self._attr_unique_id = f"{self._device.duid}_mow_area_{area['id']}"
+
+    async def async_press(self) -> None:
+        await self._async_send(
+            "Zone mow",
+            lambda: self.coordinator.mower_api.start_area_mow([self._area]),
+        )
 
 
 class RoborockRoutineButton(RoborockMowerEntity, ButtonEntity):

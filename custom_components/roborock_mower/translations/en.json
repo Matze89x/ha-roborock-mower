@@ -58,13 +58,39 @@
         "name": "Mow Progress"
       },
       "charge_state": {
-        "name": "Charge State"
+        "name": "Charge State",
+        "state": {
+          "not_charging": "Not charging",
+          "charging": "Charging",
+          "charge_completed": "Fully charged",
+          "waiting_charge": "Waiting to charge",
+          "low_power": "Low battery",
+          "charge_error": "Charging error"
+        }
       },
       "charge_type": {
-        "name": "Dock Reason"
+        "name": "Dock Reason",
+        "state": {
+          "none": "None",
+          "manual_dock": "Sent home manually",
+          "rain_dock": "Rain",
+          "do_not_disturb_dock": "Do not disturb",
+          "standby_timeout_dock": "Standby timeout",
+          "low_battery_dock": "Low battery",
+          "task_finished_dock": "Task finished",
+          "mow_fault_dock": "Mowing fault"
+        }
       },
       "pend_type": {
-        "name": "Pause Reason"
+        "name": "Pause Reason",
+        "state": {
+          "not_suspended": "Not paused",
+          "app_pause": "Paused from the app",
+          "emergency_stop": "Emergency stop",
+          "fault": "Fault",
+          "breakpoint_pause": "Resume point",
+          "other": "Other"
+        }
       },
       "error_code": {
         "name": "Error Code"
@@ -73,10 +99,73 @@
         "name": "Blade Lifespan"
       },
       "mow_state": {
-        "name": "Mow State"
+        "name": "Mow State",
+        "state": {
+          "idle": "Idle",
+          "free": "Ready",
+          "free_initializing": "Initializing",
+          "free_locating": "Locating",
+          "map_initializing": "Mapping: initializing",
+          "map_undocking": "Mapping: leaving dock",
+          "map_undock_fault": "Mapping: undocking fault",
+          "map_locating": "Mapping: locating",
+          "map_prepare_boundary": "Mapping: preparing boundary",
+          "map_prepare_island": "Mapping: preparing no-go zone",
+          "map_prepare_path": "Mapping: preparing path",
+          "map_boundary": "Mapping: boundary",
+          "map_island": "Mapping: no-go zone",
+          "map_path": "Mapping: path",
+          "map_boundary_auto": "Mapping: automatic boundary",
+          "map_erasing": "Mapping: erasing",
+          "map_save": "Mapping: saving",
+          "map_wait": "Mapping: waiting",
+          "map_recoverable_fault": "Mapping: recoverable fault",
+          "map_fault": "Mapping: fault",
+          "map_emergency_stop": "Mapping: emergency stop",
+          "map_waiting_fault": "Mapping: fault, waiting",
+          "mow_initializing": "Starting",
+          "mow_undocking": "Leaving dock",
+          "mow_locating": "Locating",
+          "mow_adjust_cutter": "Adjusting cutting height",
+          "mowing": "Mowing",
+          "mowing_edge": "Edge cutting",
+          "mow_goto": "Driving to area",
+          "paused": "Paused",
+          "recoverable_fault": "Recoverable fault",
+          "fault": "Fault",
+          "docked_rainfall": "Docked (rain)",
+          "docked_notdisturb": "Docked (do not disturb)",
+          "docked_low_battery": "Docked (low battery)",
+          "waiting": "Waiting",
+          "prepare_remote": "Preparing remote control",
+          "remote_mowing": "Remote-controlled mowing",
+          "emergency_stop": "Emergency stop",
+          "docked_manual": "Docked (manual)",
+          "dock_fault": "Docking fault",
+          "remote_undocking": "Leaving dock (remote control)",
+          "returning": "Returning to dock",
+          "returning_recoverable_fault": "Returning: recoverable fault",
+          "returning_fault": "Returning: fault",
+          "returning_emergency_stop": "Returning: emergency stop",
+          "charging": "Charging",
+          "charge_completed": "Fully charged",
+          "docked_mow_end": "Docked (mowing finished)",
+          "docked_plan_end": "Docked (schedule finished)",
+          "waiting_charge": "Waiting to charge",
+          "charge_fault": "Charging fault"
+        }
       },
       "mow_type": {
-        "name": "Mow Mode"
+        "name": "Mow Mode",
+        "state": {
+          "none": "None",
+          "full_mow": "Full lawn",
+          "edge_cut": "Edge cut",
+          "selection": "Selected zones",
+          "zoning": "Zone mowing",
+          "remote": "Remote control",
+          "random": "Random"
+        }
       }
     },
     "number": {
@@ -86,10 +175,12 @@
     },
     "select": {
       "mow_eff_mode": {
-        "name": "Efficiency Mode"
-      },
-      "mow_area": {
-        "name": "Mow Area"
+        "name": "Efficiency Mode",
+        "state": {
+          "daily": "Daily",
+          "efficient": "Efficient",
+          "manicure": "Manicure"
+        }
       }
     },
     "button": {
@@ -101,6 +192,9 @@
       },
       "cancel_dock": {
         "name": "Cancel Dock"
+      },
+      "mow_area": {
+        "name": "Mow zone: {area}"
       }
     }
   },

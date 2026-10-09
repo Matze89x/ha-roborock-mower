@@ -1,0 +1,53 @@
+name: Release
+
+# Creates the GitHub release HACS installs from. Push a tag "vX.Y.Z" whose
+# version matches manifest.json, or run this workflow by hand for an existing
+# tag. The release text is that version's section of CHANGELOG.md.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish, e.g. v0.1.1
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Check that the tag matches manifest.json
+        run: |
+          manifest=$(python3 -c "import json; print(json.load(open('custom_components/roborock_mower/manifest.json'))['version'])")
+          if [ "${TAG#v}" != "$manifest" ]; then
+            echo "Tag $TAG does not match manifest version $manifest"
+            exit 1
+          fi
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="${TAG#v}" '$0 == "## " v || index($0, "## " v " ") == 1 {found=1; next} found && /^## / {exit} found {print}' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md" > notes.md
+          cat notes.md
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Only the highest version is marked "latest", so publishing an
+          # older tag afterwards does not demote the current release.
+          highest=$(git tag --list 'v*' --sort=-version:refname | head -n 1)
+          latest=false
+          [ "$TAG" = "$highest" ] && latest=true
+          gh release create "$TAG" --verify-tag --title "${TAG#v}" \
+            --notes-file notes.md --latest="$latest"

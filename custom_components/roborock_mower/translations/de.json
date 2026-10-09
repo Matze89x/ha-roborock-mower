@@ -58,13 +58,39 @@
         "name": "Mähfortschritt"
       },
       "charge_state": {
-        "name": "Ladezustand"
+        "name": "Ladezustand",
+        "state": {
+          "not_charging": "Lädt nicht",
+          "charging": "Lädt",
+          "charge_completed": "Vollständig geladen",
+          "waiting_charge": "Wartet auf Laden",
+          "low_power": "Akku schwach",
+          "charge_error": "Ladefehler"
+        }
       },
       "charge_type": {
-        "name": "Grund für Rückkehr zur Station"
+        "name": "Grund für Rückkehr zur Station",
+        "state": {
+          "none": "Keiner",
+          "manual_dock": "Manuell zurückgeschickt",
+          "rain_dock": "Regen",
+          "do_not_disturb_dock": "Nicht stören",
+          "standby_timeout_dock": "Standby-Zeit abgelaufen",
+          "low_battery_dock": "Akku schwach",
+          "task_finished_dock": "Aufgabe beendet",
+          "mow_fault_dock": "Fehler beim Mähen"
+        }
       },
       "pend_type": {
-        "name": "Pausengrund"
+        "name": "Pausengrund",
+        "state": {
+          "not_suspended": "Nicht pausiert",
+          "app_pause": "Über App pausiert",
+          "emergency_stop": "Not-Aus",
+          "fault": "Fehler",
+          "breakpoint_pause": "Fortsetzungspunkt",
+          "other": "Sonstiges"
+        }
       },
       "error_code": {
         "name": "Fehlercode"
@@ -73,10 +99,73 @@
         "name": "Messer-Lebensdauer"
       },
       "mow_state": {
-        "name": "Mähstatus"
+        "name": "Mähstatus",
+        "state": {
+          "idle": "Bereit",
+          "free": "Bereit (frei)",
+          "free_initializing": "Initialisiert",
+          "free_locating": "Ortet Position",
+          "map_initializing": "Kartierung: initialisiert",
+          "map_undocking": "Kartierung: verlässt Station",
+          "map_undock_fault": "Kartierung: Fehler beim Abdocken",
+          "map_locating": "Kartierung: ortet Position",
+          "map_prepare_boundary": "Kartierung: bereitet Grenze vor",
+          "map_prepare_island": "Kartierung: bereitet Sperrzone vor",
+          "map_prepare_path": "Kartierung: bereitet Weg vor",
+          "map_boundary": "Kartierung: Grenze",
+          "map_island": "Kartierung: Sperrzone",
+          "map_path": "Kartierung: Weg",
+          "map_boundary_auto": "Kartierung: automatische Grenze",
+          "map_erasing": "Kartierung: löscht",
+          "map_save": "Kartierung: speichert",
+          "map_wait": "Kartierung: wartet",
+          "map_recoverable_fault": "Kartierung: behebbarer Fehler",
+          "map_fault": "Kartierung: Fehler",
+          "map_emergency_stop": "Kartierung: Not-Aus",
+          "map_waiting_fault": "Kartierung: Fehler, wartet",
+          "mow_initializing": "Startet",
+          "mow_undocking": "Verlässt Station",
+          "mow_locating": "Ortet Position",
+          "mow_adjust_cutter": "Stellt Schnitthöhe ein",
+          "mowing": "Mäht",
+          "mowing_edge": "Kantenschnitt",
+          "mow_goto": "Fährt zur Zone",
+          "paused": "Pausiert",
+          "recoverable_fault": "Behebbarer Fehler",
+          "fault": "Fehler",
+          "docked_rainfall": "Angedockt (Regen)",
+          "docked_notdisturb": "Angedockt (Nicht stören)",
+          "docked_low_battery": "Angedockt (Akku schwach)",
+          "waiting": "Wartet",
+          "prepare_remote": "Bereitet Fernsteuerung vor",
+          "remote_mowing": "Ferngesteuertes Mähen",
+          "emergency_stop": "Not-Aus",
+          "docked_manual": "Angedockt (manuell)",
+          "dock_fault": "Fehler beim Andocken",
+          "remote_undocking": "Verlässt Station (Fernsteuerung)",
+          "returning": "Kehrt zur Station zurück",
+          "returning_recoverable_fault": "Rückkehr: behebbarer Fehler",
+          "returning_fault": "Rückkehr: Fehler",
+          "returning_emergency_stop": "Rückkehr: Not-Aus",
+          "charging": "Lädt",
+          "charge_completed": "Vollständig geladen",
+          "docked_mow_end": "Angedockt (Mähen beendet)",
+          "docked_plan_end": "Angedockt (Zeitplan beendet)",
+          "waiting_charge": "Wartet auf Laden",
+          "charge_fault": "Ladefehler"
+        }
       },
       "mow_type": {
-        "name": "Mähmodus"
+        "name": "Mähmodus",
+        "state": {
+          "none": "Keiner",
+          "full_mow": "Ganze Fläche",
+          "edge_cut": "Kantenschnitt",
+          "selection": "Ausgewählte Zonen",
+          "zoning": "Zonenmähen",
+          "remote": "Fernsteuerung",
+          "random": "Zufällig"
+        }
       }
     },
     "number": {
@@ -86,10 +175,12 @@
     },
     "select": {
       "mow_eff_mode": {
-        "name": "Effizienzmodus"
-      },
-      "mow_area": {
-        "name": "Mähzone"
+        "name": "Effizienzmodus",
+        "state": {
+          "daily": "Täglich",
+          "efficient": "Effizient",
+          "manicure": "Feinschnitt"
+        }
       }
     },
     "button": {
@@ -101,6 +192,9 @@
       },
       "cancel_dock": {
         "name": "Rückkehr abbrechen"
+      },
+      "mow_area": {
+        "name": "Zone mähen: {area}"
       }
     }
   },

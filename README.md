@@ -15,6 +15,17 @@ Home-Assistant-Integration für **Roborock-Mähroboter** (RockNeo, z. B. Q105 /
 > Die Versionierung beginnt neu bei **0.1.0**. Danke an das Original für das
 > Reverse-Engineering des Mäher-Protokolls.
 
+## Neu in 0.1.1
+
+- Statuswerte erscheinen **übersetzt** (Deutsch/Englisch) statt als Rohtexte wie
+  `charge_completed`.
+- Die **Rückfahrt zur Station** wird als „Kehrt zurück“ angezeigt statt als
+  „Angedockt“. Ein im Garten stehender Mäher zeigt „Untätig“.
+- Der **Kantenschnitt** schickt wie die App die gespeicherten Zonen mit.
+- Pro Zone gibt es eine Taste **„Zone mähen: …“**. Sie ersetzt die Auswahl „Mähzone“.
+- Die **Diagnose-Datei** enthält einen Verlauf aller Befehle und Statusänderungen.
+  Riesige Debug-Logs sind dafür nicht mehr nötig.
+
 ## Neu in 0.1.0 (Kurzfassung)
 
 - **Läuft parallel zur offiziellen Roborock-Integration.** Die Integration bringt
@@ -42,13 +53,14 @@ Alle Details: [CHANGELOG.md](CHANGELOG.md).
 ## Funktionen
 
 - **Rasenmäher-Entität** – Mähen starten (ganze Fläche), Pause, Fortsetzen,
-  zurück zur Station; Status: mäht / pausiert / kehrt zurück / an der Station / Fehler
-- **Kantenschnitt** (Taste) – startet den Kanten-/Randschnitt
+  zurück zur Station; Status: mäht / pausiert / kehrt zurück / angedockt / untätig / Fehler
+- **Kantenschnitt** (Taste) – startet den Kanten-/Randschnitt für die gespeicherten Zonen
 - **Stopp** und **Rückkehr abbrechen** (Tasten)
 - **Sensoren** – Akku, Mähfortschritt, Mähstatus, Mähmodus, Ladezustand, Fehlercode,
-  Grund für Rückkehr, Pausengrund, Messer-Lebensdauer (teils Diagnose / standardmäßig aus)
-- **Schnitthöhe** (Zahl) und **Effizienzmodus** (Auswahl: Daily / Efficient / Manicure)
-- **Mähzone** (Auswahl) – gespeicherte Zone wählen = Zonenmähen starten
+  Grund für Rückkehr, Pausengrund, Messer-Lebensdauer (teils Diagnose / standardmäßig
+  aus); Statuswerte auf Deutsch und Englisch
+- **Schnitthöhe** (Zahl) und **Effizienzmodus** (Auswahl: Täglich / Effizient / Feinschnitt)
+- **Zone mähen: …** (eine Taste pro gespeicherter Zone) – startet das Zonenmähen
 - **Routinen** aus der Roborock-App erscheinen als Tasten
 - **Aktionen** `roborock_mower.mow_areas` (Zonen mähen) und
   `roborock_mower.list_areas` (Zonen auflisten)
@@ -88,13 +100,15 @@ kopieren und Home Assistant neu starten.
 
 ## Fehlersuche – was du mir schicken kannst
 
-1. **Diagnose herunterladen:** Einstellungen → Geräte & Dienste → Roborock Mower →
-   ⋮ → **Diagnose herunterladen**. Enthält Versionen, Verbindungsstatus,
-   Roh-Datenpunkte (DPS) und das Produktschema. Zugangsdaten, E-Mail,
-   Seriennummer, Schlüssel und GPS-Position sind geschwärzt.
-2. **Debug-Protokoll:** dort ⋮ → **Debug-Protokollierung aktivieren**, das
-   Problem nachstellen (z. B. Mähen starten, Kantenschnitt, Rückkehr), dann
-   deaktivieren – das Log wird heruntergeladen. Alternativ in `configuration.yaml`:
+1. **Test durchführen** (z. B. Mähen starten, Pause, Kantenschnitt, Rückkehr) und
+   kurz notieren, **was der Mäher wann tatsächlich gemacht hat**.
+2. Danach **Diagnose herunterladen:** Einstellungen → Geräte & Dienste → Roborock
+   Mower → ⋮ → **Diagnose herunterladen**. Sie enthält einen **Verlauf** der
+   letzten 300 Befehle, Antworten und Statusänderungen mit Uhrzeit, außerdem
+   Versionen, Verbindungsstatus, Roh-Datenpunkte (DPS) und das Produktschema.
+   Zugangsdaten, E-Mail, Seriennummer, Schlüssel und GPS-Position sind geschwärzt.
+3. Nur falls nötig ein **Debug-Protokoll** über `configuration.yaml`, so ist auch
+   der Start enthalten:
 
    ```yaml
    logger:
@@ -102,15 +116,16 @@ kopieren und Home Assistant neu starten.
      logs:
        custom_components.roborock_mower: debug
    ```
-3. Dazu kurz notieren, **was der Mäher wann tatsächlich gemacht hat** (mäht,
-   Kante, pausiert, fährt zurück, Fehler) – damit lassen sich die Statuscodes
-   zuordnen. Warnungen „Unmapped mower mow_state …“ bitte immer mitschicken.
+
+   Die eingebaute Library bleibt dabei bewusst auf INFO, sonst entstehen
+   hunderte MB. Warnungen „Unmapped mower mow_state …“ oder „Unknown … value“
+   bitte immer mitschicken.
 
 ## Karte
 
 Die Rasen-/Zonenkarte wird (noch) nicht als Bild dargestellt: Die App lädt sie als
 Datei aus dem Roborock-Cloudspeicher über ihr natives SDK, das noch nicht
-nachgebaut ist. Die gespeicherten **Zonen** sind über die Auswahl „Mähzone“
+nachgebaut ist. Die gespeicherten **Zonen** sind über die Tasten „Zone mähen: …“
 nutzbar. Details: [PROTOCOL.md](PROTOCOL.md) §7.
 
 ## Funktionsweise (kurz)
@@ -142,6 +157,17 @@ integration** (vacuums).
 > and is developed further here as **Roborock Mower**. Versioning restarts at
 > **0.1.0**. Thanks to the original for reverse-engineering the mower protocol.
 
+## What's new in 0.1.1
+
+- State values are **translated** (German/English) instead of raw texts like
+  `charge_completed`.
+- **Driving back to the dock** reads "Returning" instead of "Docked". A mower
+  stopped in the garden reads "Idle".
+- The **edge cut** sends the saved areas, like the app.
+- One **"Mow zone: …"** button per saved area replaces the Mow Area select.
+- The **diagnostics** contain a history of all commands and state changes, so
+  huge debug logs are no longer needed.
+
 ## What's new in 0.1.0 (summary)
 
 - **Runs alongside the official Roborock integration.** The integration bundles
@@ -166,12 +192,13 @@ Full details: [CHANGELOG.md](CHANGELOG.md).
 ## Features
 
 - **Lawn mower entity** – start (full lawn), pause, resume, return to dock;
-  activity: mowing / paused / returning / docked / error
-- **Edge Cut**, **Stop** and **Cancel Dock** buttons
+  activity: mowing / paused / returning / docked / idle / error
+- **Edge Cut** (for the saved areas), **Stop** and **Cancel Dock** buttons
 - **Sensors** – battery, mow progress, mow state, mow mode, charge state, error
-  code, dock reason, pause reason, blade lifespan (some diagnostic / disabled by default)
+  code, dock reason, pause reason, blade lifespan (some diagnostic / disabled by
+  default); state values in English and German
 - **Mow Height** (number) and **Efficiency Mode** (select: Daily / Efficient / Manicure)
-- **Mow Area** select – picking a saved area starts a zone mow
+- **Mow zone: …** – one button per saved area starts a zone mow
 - **Routines** from the Roborock app appear as buttons
 - **Actions** `roborock_mower.mow_areas` and `roborock_mower.list_areas`
 
@@ -208,11 +235,14 @@ restart Home Assistant.
 
 ## Troubleshooting – what to send
 
-1. **Download diagnostics:** Settings → Devices & services → Roborock Mower → ⋮ →
-   **Download diagnostics** (versions, connection state, raw data points, product
-   schema; credentials, e-mail, serial, keys and GPS position are redacted).
-2. **Debug log:** ⋮ → **Enable debug logging**, reproduce the issue, disable it –
-   the log downloads. Or in `configuration.yaml`:
+1. **Run the test** (e.g. start, pause, edge cut, return to dock) and note **what
+   the mower actually did and when**.
+2. Then **download diagnostics:** Settings → Devices & services → Roborock Mower →
+   ⋮ → **Download diagnostics**. It contains a **history** of the last 300
+   commands, answers and state changes with timestamps, plus versions, connection
+   state, raw data points and the product schema. Credentials, e-mail, serial,
+   keys and GPS position are redacted.
+3. Only if needed, a **debug log** via `configuration.yaml` (includes startup):
 
    ```yaml
    logger:
@@ -220,14 +250,16 @@ restart Home Assistant.
      logs:
        custom_components.roborock_mower: debug
    ```
-3. Note **what the mower actually did and when** so state codes can be mapped;
-   always include "Unmapped mower mow_state …" warnings.
+
+   The bundled library deliberately stays at INFO, otherwise the log grows by
+   hundreds of MB. Always include "Unmapped mower mow_state …" or "Unknown …
+   value" warnings.
 
 ## Map
 
 The lawn/zone map is not rendered yet: the app downloads it as a file from
 Roborock's cloud storage via its native SDK, which has not been reverse-engineered.
-Saved **zones** are available through the Mow Area select. See
+Saved **zones** are available through the "Mow zone: …" buttons. See
 [PROTOCOL.md](PROTOCOL.md) §7.
 
 ## How it works (short)

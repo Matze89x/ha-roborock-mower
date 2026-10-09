@@ -2,7 +2,9 @@
 
 Download from Settings > Devices & services > Roborock Mower > ... > Download
 diagnostics. Credentials, the account e-mail, serial numbers, local keys and the
-mower's GPS position are redacted.
+mower's GPS position are redacted. ``history`` lists the last commands, the
+mower's answers and every data-point change with local timestamps -- enough to
+follow a test run without a debug log.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from homeassistant.loader import async_get_integration
 
 from .const import CONF_BASE_URL, DOMAIN
 from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
-from .mower_api import DPS_GPS_COORDINATE, redact_dps
+from .mower_api import DPS_GPS_COORDINATE, derive_activity, redact_dps
 from .vendor import ROBOROCK_VERSION
 
 TO_REDACT = {"gps_coordinate", "local_key", "sn", "duid", "lat", "lon"}
@@ -61,6 +63,9 @@ def _mower_diagnostics(coordinator: RoborockMowerCoordinator) -> dict[str, Any]:
                 else None
             ),
         },
+        "activity": derive_activity(status, api.return_pending),
+        "return_pending": api.return_pending,
+        "areas": api.areas,
         "status": async_redact_data(status_dict, TO_REDACT),
         "mow_state_label": status.mow_state_label,
         "raw_dps": {
@@ -75,6 +80,7 @@ def _mower_diagnostics(coordinator: RoborockMowerCoordinator) -> dict[str, Any]:
             }
             for item in (product.schema or [])
         ],
+        "history": list(api.history),
     }
 
 

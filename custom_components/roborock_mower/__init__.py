@@ -24,6 +24,7 @@ from homeassistant.exceptions import (
 )
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
@@ -53,6 +54,14 @@ from .vendor.roborock.protocol import create_mqtt_params
 from .vendor.roborock.web_api import RoborockApiClient, UserWebApiClient
 
 _LOGGER = logging.getLogger(__name__)
+
+# The bundled python-roborock logs every raw message at DEBUG -- local pings,
+# map/path frames while mowing (hundreds of MB per session) and the mower's
+# Wi-Fi details. Keep it at INFO unless the user configures it explicitly, so
+# enabling debug logging for this integration stays readable.
+_VENDOR_LOGGER = logging.getLogger(f"{__name__}.vendor")
+if _VENDOR_LOGGER.level == logging.NOTSET:
+    _VENDOR_LOGGER.setLevel(logging.INFO)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -292,6 +301,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
         raise
 
     entry.runtime_data = runtime
+    _remove_retired_entities(hass, runtime)
 
     stop_fired = False
 
@@ -321,6 +331,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+def _remove_retired_entities(hass: HomeAssistant, runtime: MowerRuntimeData) -> None:
+    """Drop entities earlier versions created that no longer exist."""
+    registry = er.async_get(hass)
+    for coordinator in runtime.coordinators:
+        # 0.1.1: the "Mow Area" select became one "mow zone" button per area.
+        if entity_id := registry.async_get_entity_id(
+            "select", DOMAIN, f"{coordinator.device.duid}_mow_area"
+        ):
+            registry.async_remove(entity_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> bool:

@@ -114,7 +114,7 @@ def test_dp_value_label_maps() -> None:
 
 
 def test_efficiency_mode_maps_round_trip() -> None:
-    assert mower_api.EFF_MODE_LABELS == {1: "Daily", 2: "Efficient", 3: "Manicure"}
+    assert mower_api.EFF_MODE_LABELS == {1: "daily", 2: "efficient", 3: "manicure"}
     for code, label in mower_api.EFF_MODE_LABELS.items():
         assert mower_api.EFF_MODE_REVERSE[label] == code
 
@@ -436,3 +436,112 @@ def test_state_codes_cover_bundled_python_roborock() -> None:
     for code in RoborockMowerStateCode:
         if code.value >= 0:
             assert code.value in mower_api.ROBOT_DETAIL_STATE_LABELS, code
+
+
+
+def _status(**dps: int) -> "mower_api.MowerStatus":
+    codes = {
+        "mow_state": mower_api.DPS_MOW_STATE,
+        "charge_state": mower_api.DPS_CHARGE_STATE,
+        "charge_type": mower_api.DPS_CHARGE_TYPE,
+        "error_code": mower_api.DPS_ERROR_CODE,
+        "dock_state": mower_api.DPS_DOCK_STATE,
+    }
+    return mower_api.MowerStatus.from_dps({codes[k]: v for k, v in dps.items()})
+
+
+def test_derive_activity() -> None:
+    derive = mower_api.derive_activity
+    # Docked and charged (live: idle + charge_completed).
+    assert derive(_status(mow_state=0, charge_state=2)) == "docked"
+    assert derive(_status(mow_state=0, charge_state=3)) == "docked"  # waiting_charge
+    # Driving back after "return to dock": idle task, not charging -> not docked.
+    assert derive(_status(mow_state=0, charge_state=0), return_pending=True) == "returning"
+    assert derive(_status(mow_state=0, charge_state=0, charge_type=1)) == "returning"
+    assert derive(_status(mow_state=105, charge_state=0)) == "returning"
+    assert derive(_status(mow_state=105, charge_state=1)) == "docked"
+    # Stopped in the garden.
+    assert derive(_status(mow_state=0, charge_state=0)) == "idle"
+    assert derive(_status(mow_state=101, charge_state=0)) == "idle"
+    # Task states.
+    assert derive(_status(mow_state=55, charge_state=0)) == "mowing"
+    assert derive(_status(mow_state=56, charge_state=0)) == "mowing"  # edge cut
+    assert derive(_status(mow_state=8)) == "mowing"  # mapping
+    assert derive(_status(mow_state=58)) == "paused"
+    assert derive(_status(mow_state=71)) == "returning"
+    assert derive(_status(mow_state=0, dock_state=1)) == "returning"
+    assert derive(_status(mow_state=60)) == "error"
+    assert derive(_status(mow_state=0, charge_state=2, error_code=5)) == "error"
+    # Firmware without charge_state: state code alone.
+    assert derive(_status(mow_state=0)) == "docked"
+    assert derive(mower_api.MowerStatus()) == "docked"
+    # Unknown code: caller decides.
+    assert derive(_status(mow_state=250)) is None
+
+
+def test_history_records_changes_without_gps() -> None:
+    api = _api()
+    api.apply_push({mower_api.DPS_MOW_STATE: 55, mower_api.DPS_GPS_COORDINATE: "x"})
+    api.apply_push({mower_api.DPS_MOW_STATE: 55, mower_api.DPS_GPS_COORDINATE: "y"})
+    api.apply_push({mower_api.DPS_BATTERY: 80})
+    entries = list(api.history)
+    assert [e["dps"] for e in entries] == [{"123": 55}, {"121": 80}]
+    assert all(e["kind"] == "push" and e["time"] for e in entries)
+
+
+def test_command_is_recorded_with_result() -> None:
+    api = _api_with_result(["ok"])
+    asyncio.run(api.pause())
+    [entry] = list(api.history)
+    assert entry["kind"] == "command"
+    assert entry["command"] == "APP_BUTTON MOW_PAUSE"
+    assert entry["result"] == "['ok']"
+
+
+def test_edge_cut_sends_saved_areas_like_the_app() -> None:
+    api = _api_with_result(["ok"])
+    api.areas = [{"id": 2, "name": "Garten"}]
+    asyncio.run(api.edge_cut())
+    _method, params = api.channel.rpc_channel.calls[-1]
+    assert params["app_button"] == "MOW_EDGE"
+    assert params["modify_map"] == {"boundaries": [{"id": 2, "name": "Garten"}]}
+
+
+def test_edge_cut_falls_back_to_bare_when_areas_rejected() -> None:
+    api = _api_with_result(None)
+    replies = [["fail"], ["ok"]]
+
+    async def _send(method: str, params: dict) -> object:
+        api.channel.rpc_channel.calls.append((method, params))
+        return replies.pop(0)
+
+    api.channel.rpc_channel.send_command = _send
+    api.areas = [{"id": 2, "name": "Garten"}]
+    assert asyncio.run(api.edge_cut()) == ["ok"]
+    first, second = (params for _m, params in api.channel.rpc_channel.calls)
+    assert "modify_map" in first
+    assert "modify_map" not in second
+
+
+def test_edge_cut_without_known_areas_is_bare() -> None:
+    api = _api_with_result(["ok"])
+    api.areas = []
+    asyncio.run(api.edge_cut())
+    _method, params = api.channel.rpc_channel.calls[-1]
+    assert params == {"id": params["id"], "type": "APP_BUTTON", "app_button": "MOW_EDGE"}
+
+
+def test_return_pending_lifecycle() -> None:
+    api = _api_with_result(["ok"])
+    api.apply_push({mower_api.DPS_MOW_STATE: 58, mower_api.DPS_CHARGE_STATE: 0})
+    asyncio.run(api.dock())
+    assert api.return_pending
+    # Arriving on the dock ends it ...
+    api.apply_push({mower_api.DPS_CHARGE_STATE: 1})
+    assert not api.return_pending
+    # ... and so does any new task.
+    api.apply_push({mower_api.DPS_CHARGE_STATE: 0})
+    asyncio.run(api.dock())
+    assert api.return_pending
+    asyncio.run(api.start())
+    assert not api.return_pending
