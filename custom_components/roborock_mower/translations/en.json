@@ -419,16 +419,6 @@
       "mow_passes": {
         "name": "Mowing passes"
       },
-      "direction_mode": {
-        "name": "Direction mode",
-        "state": {
-          "auto_deflection": "Auto",
-          "fixed": "Fixed"
-        }
-      },
-      "rotation_angle": {
-        "name": "Direction change per mow"
-      },
       "boundary_perception": {
         "name": "Boundary detection",
         "state": {
@@ -498,7 +488,7 @@
         "name": "Mow Height"
       },
       "mow_direction": {
-        "name": "Mowing direction (angle)"
+        "name": "Mowing direction (custom angle)"
       }
     },
     "select": {
@@ -508,6 +498,23 @@
           "daily": "Standard",
           "efficient": "Efficient",
           "manicure": "Manicure (not in the app)"
+        }
+      },
+      "direction_mode": {
+        "name": "Direction mode",
+        "state": {
+          "auto": "Auto",
+          "optimal": "Optimal",
+          "custom": "Custom"
+        }
+      },
+      "rotation_angle": {
+        "name": "Direction change per mow",
+        "state": {
+          "15": "15°",
+          "30": "30°",
+          "60": "60°",
+          "90": "90°"
         }
       }
     },

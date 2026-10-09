@@ -3,6 +3,32 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.3.4 – Direction mode to choose
+
+**Kurzfassung (Deutsch):** Die Mährichtung lässt sich jetzt wie in der App
+wählen: **Auto / Optimal / Benutzerdefiniert**. Dazu kommt die
+**Richtungsänderung je Mähvorgang** (15/30/60/90°) für Auto. Die Zahl
+„Mährichtung (benutzerdefinierter Winkel)“ gilt für Benutzerdefiniert. Hat eine
+Zone in der App eigene Einstellungen, steht sie als Attribut
+`zones_with_own_settings` an diesen Einstellungen. Für sie gelten Änderungen
+aus Home Assistant, die die globalen Einstellungen betreffen, nicht.
+
+### New
+
+- Select "Direction mode" (`direction_type`: Auto = `AUTO_DEFLECTION`,
+  Optimal = `NAV_EFFICIENT`, Custom = `CUSTOM`, confirmed live) and select
+  "Direction change per mow" (`rotation_angle` 15/30/60/90°, the app's
+  choices), both written with `SET_MOW_PREFERENCE`.
+- Mowing preference entities (efficiency, direction mode and angle, rotation,
+  edge cut) show zones whose own settings replace the global ones
+  (`zones_with_own_settings`).
+
+### Changes
+
+- The read-only "direction mode" and "direction change per mow" sensors are
+  replaced by the selects and removed.
+- The angle number is named "Mowing direction (custom angle)".
+
 ## 0.3.3 – More ways to the map
 
 **Kurzfassung (Deutsch):** Auch über die Cloud hat der Mäher auf die

@@ -83,3 +83,24 @@ class RoborockMowerEntity(CoordinatorEntity[RoborockMowerCoordinator]):
             await command()
         except RoborockException as err:
             raise HomeAssistantError(f"{action} failed: {err}") from err
+
+
+class RoborockPreferenceEntity(RoborockMowerEntity):
+    """An entity that shows and changes the global mowing preferences."""
+
+    @property
+    def preference(self) -> dict[str, Any]:
+        return self.coordinator.mow_preference or {}
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        # Zones with their own settings in the app don't follow these.
+        zones = self.coordinator.zones_with_own_settings
+        return {"zones_with_own_settings": zones} if zones else None
+
+    async def _async_set_preference(self, action: str, **changes: Any) -> None:
+        await self._async_send(
+            action, lambda: self.coordinator.mower_api.set_mow_preference(**changes)
+        )
+        self.async_write_ha_state()
+        self.coordinator.request_settings_refresh()

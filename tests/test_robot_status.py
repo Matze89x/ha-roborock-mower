@@ -363,8 +363,6 @@ def test_sensor_values_from_the_live_status() -> None:
         "map_updated": datetime(2026, 10, 9, 8, 15, 21, tzinfo=UTC),
         "status_updated": datetime(2026, 10, 9, 8, 17, tzinfo=UTC),
         "mow_passes": 1,
-        "direction_mode": "auto_deflection",
-        "rotation_angle": 15,
         "boundary_perception": "intelligence",
         "plan_count": 3,
         "last_fault": 35,
@@ -796,6 +794,26 @@ async def test_settings_can_be_changed(
     assert sent[-1]["direction_type"] == "AUTO_DEFLECTION"
     assert sent[-1]["mow_times"] == 1
 
+    # Direction mode and the turn per mow, with the app's values.
+    mode = _entity_id(hass, "select", "direction_mode")
+    rotation = _entity_id(hass, "select", "rotation_angle_select")
+    assert hass.states.get(mode).state == "auto"
+    assert hass.states.get(rotation).state == "15"
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": mode, "option": "optimal"}, blocking=True
+    )
+    assert sent[-1]["direction_type"] == "NAV_EFFICIENT"
+    assert hass.states.get(mode).state == "optimal"
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": mode, "option": "custom"}, blocking=True
+    )
+    assert sent[-1]["direction_type"] == "CUSTOM"
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": rotation, "option": "60"}, blocking=True
+    )
+    assert sent[-1]["rotation_angle"] == 60
+    assert "zones_with_own_settings" not in hass.states.get(mode).attributes
+
     # The lawn mower entity can stop a task (Home Assistant 2026.10+).
     mower = _entity_id(hass, "lawn_mower", "lawn_mower")
     await hass.services.async_call(
@@ -869,4 +887,29 @@ async def test_save_map_data_writes_the_captured_messages(
         "GET_FULL_MAP_map.bin",
         "get_map_map_map.bin",
     }
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_zones_with_own_settings_are_shown(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """Seen live: after a change in the app, the zone kept its own settings."""
+    calls: list[str] = []
+    own = copy.deepcopy(LIVE_PREFERENCE)
+    own["preference_config"]["global"]["direction_type"] = "NAV_EFFICIENT"
+    own["preference_config"]["custom"][0].update(
+        mode="CUSTOM", direction_type="AUTO_DEFLECTION"
+    )
+    answer = _answering(calls)
+
+    async def _send(method: str, params: dict | None = None) -> object:
+        if params and params["type"] == "GET_MOW_PREFERENCE_CONFIG":
+            raise RoborockException(f"Unexpected API Result: {json.dumps(own)}")
+        return await answer(method, params)
+
+    channel.rpc_channel.send_command.side_effect = _send
+    await _setup(hass, config_entry)
+    mode = _entity_id(hass, "select", "direction_mode")
+    await _wait_until(hass, lambda: hass.states.get(mode).state == "optimal")
+    assert hass.states.get(mode).attributes["zones_with_own_settings"] == ["Garten"]
     assert await hass.config_entries.async_unload(config_entry.entry_id)

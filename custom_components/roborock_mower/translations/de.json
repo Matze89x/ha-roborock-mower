@@ -419,16 +419,6 @@
       "mow_passes": {
         "name": "Mähdurchgänge"
       },
-      "direction_mode": {
-        "name": "Richtungsmodus",
-        "state": {
-          "auto_deflection": "Auto",
-          "fixed": "Fest"
-        }
-      },
-      "rotation_angle": {
-        "name": "Richtungsänderung je Mähvorgang"
-      },
       "boundary_perception": {
         "name": "Randerkennung",
         "state": {
@@ -498,7 +488,7 @@
         "name": "Schnitthöhe"
       },
       "mow_direction": {
-        "name": "Mährichtung (Winkel)"
+        "name": "Mährichtung (benutzerdefinierter Winkel)"
       }
     },
     "select": {
@@ -508,6 +498,23 @@
           "daily": "Standard",
           "efficient": "Effizient",
           "manicure": "Feinschnitt (nicht in der App)"
+        }
+      },
+      "direction_mode": {
+        "name": "Richtungsmodus",
+        "state": {
+          "auto": "Auto",
+          "optimal": "Optimal",
+          "custom": "Benutzerdefiniert"
+        }
+      },
+      "rotation_angle": {
+        "name": "Richtungsänderung je Mähvorgang",
+        "state": {
+          "15": "15°",
+          "30": "30°",
+          "60": "60°",
+          "90": "90°"
         }
       }
     },

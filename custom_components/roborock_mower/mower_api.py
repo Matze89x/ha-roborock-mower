@@ -139,6 +139,16 @@ EFF_MODE_LABELS: dict[int, str] = {1: "daily", 2: "efficient", 3: "manicure"}
 EFF_MODE_REVERSE: dict[str, int] = {v: k for k, v in EFF_MODE_LABELS.items()}
 EFF_MODE_WIRE: dict[int, str] = {1: "DAILY", 2: "EFFICIENT", 3: "MANICURE"}
 
+# --- MowPreference.direction_type: the app's "Auto", "Optimal" and "Custom"
+# (confirmed live on a Q105). "Custom" mows at the fixed ``direction`` angle;
+# "Auto" turns by ``rotation_angle`` (app: 15/30/60/90 degrees) every mow.
+DIRECTION_MODE_WIRE: dict[str, str] = {
+    "auto": "AUTO_DEFLECTION",
+    "optimal": "NAV_EFFICIENT",
+    "custom": "CUSTOM",
+}
+ROTATION_ANGLES = (15, 30, 60, 90)
+
 # remote_pb answers a command with ["ok"] when the mower acts and ["fail"] when
 # it rejects it (e.g. start while the lid is open or the mower is off the map).
 _REJECTED_RESULT = "fail"

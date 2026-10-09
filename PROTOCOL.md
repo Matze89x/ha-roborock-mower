@@ -280,9 +280,16 @@ Q105 has no 128, 130, 131, 136, 137, 140 (blade life) or 141, so the
 integration creates entities only for listed data points.
 
 `GET_MOW_PREFERENCE_CONFIG` → `preference_config.global`: `mow_times`
-(passes), `direction` (°), `direction_type` (`AUTO_DEFLECTION`),
-`rotation_angle` (° per mow), `boundary_perception` (`INTELLIGENCE`),
-`keep_edge` (1/0), `effective` (efficiency mode).
+(passes), `direction` (°, the angle of "Custom"), `direction_type` – the
+app's **Auto** = `AUTO_DEFLECTION`, **Optimal** = `NAV_EFFICIENT`,
+**Custom** = `CUSTOM` (confirmed live) –, `rotation_angle` (° per mow for
+Auto; the app offers 15/30/60/90), `boundary_perception` (`INTELLIGENCE`),
+`keep_edge` (1/0, the app's edge cut), `effective` (efficiency: `DAILY` =
+Standard, `EFFICIENT`; `MANICURE` is not offered on the Q105). Each entry of
+`preference_config.custom[]` is a zone; `mode: GLOBAL` means it follows the
+global preference, `mode: CUSTOM` that it has its own (seen live after
+changing settings in the app). `SET_MOW_PREFERENCE` with the whole global
+preference changes it.
 
 ---
 

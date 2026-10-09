@@ -713,6 +713,9 @@ def _remove_retired_entities(hass: HomeAssistant, runtime: MowerRuntimeData) -> 
         # 0.3.0: read-only views of settings that now have a switch / number.
         ("binary_sensor", "keep_edge"),
         ("sensor", "mow_direction"),
+        # 0.3.4: direction mode and rotation angle became selects.
+        ("sensor", "direction_mode"),
+        ("sensor", "rotation_angle"),
     )
     for coordinator in runtime.coordinators:
         for platform, key in retired:
