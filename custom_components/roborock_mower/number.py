@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
-from .entity import RoborockMowerEntity, remove_entity
+from .entity import RoborockMowerEntity, RoborockPreferenceEntity, remove_entity
 from .mower_api import DPS_MOW_HEIGHT
 from .robot_status import as_number
 
@@ -56,11 +56,10 @@ class RoborockMowHeightNumber(RoborockMowerEntity, NumberEntity):
         )
 
 
-class RoborockMowDirectionNumber(RoborockMowerEntity, NumberEntity):
+class RoborockMowDirectionNumber(RoborockPreferenceEntity, NumberEntity):
     """Mowing direction in degrees (preference ``direction``), 5-degree steps.
 
-    The fixed angle for the app's "custom" direction; with "auto" the mower
-    starts from it and turns by the rotation angle each run.
+    The angle the direction mode "Custom" mows at (the app's slider).
     """
 
     _attr_translation_key = "mow_direction"
@@ -78,12 +77,7 @@ class RoborockMowDirectionNumber(RoborockMowerEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        return as_number((self.coordinator.mow_preference or {}).get("direction"))
+        return as_number(self.preference.get("direction"))
 
     async def async_set_native_value(self, value: float) -> None:
-        await self._async_send(
-            "Set mowing direction",
-            lambda: self.coordinator.mower_api.set_mow_preference(direction=int(value)),
-        )
-        self.async_write_ha_state()
-        self.coordinator.request_settings_refresh()
+        await self._async_set_preference("Set mowing direction", direction=int(value))

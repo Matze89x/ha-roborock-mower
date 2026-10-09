@@ -221,6 +221,21 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         pref = cfg.get("global") if isinstance(cfg, dict) else None
         return pref if isinstance(pref, dict) else None
 
+    @property
+    def zones_with_own_settings(self) -> list[str]:
+        """Zones whose own mowing preferences replace the global ones.
+
+        Changes from Home Assistant go to the global preferences, which these
+        zones don't use (preference ``mode`` CUSTOM, set in the app).
+        """
+        cfg = self.mower_api.preference_config
+        zones = cfg.get("custom") if isinstance(cfg, dict) else None
+        return [
+            str(zone.get("area_name") or zone.get("area_id"))
+            for zone in zones or []
+            if isinstance(zone, dict) and zone.get("mode") == "CUSTOM"
+        ]
+
     def note_push(self, changes: frozenset[int]) -> None:
         """React to a live data-point push: re-read the full status if useful."""
         if not changes & STATUS_TRIGGER_DPS:

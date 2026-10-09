@@ -22,7 +22,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    DEGREE,
     PERCENTAGE,
     REVOLUTIONS_PER_MINUTE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
@@ -759,19 +758,6 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         translation_key="mow_passes",
         icon="mdi:repeat",
         value_fn=_preference_number("mow_times"),
-    ),
-    RobotStatusSensorDescription(
-        key="direction_mode",
-        translation_key="direction_mode",
-        icon="mdi:arrow-decision-outline",
-        value_fn=_preference_state("direction_type"),
-    ),
-    RobotStatusSensorDescription(
-        key="rotation_angle",
-        translation_key="rotation_angle",
-        native_unit_of_measurement=DEGREE,
-        icon="mdi:rotate-right",
-        value_fn=_preference_number("rotation_angle"),
     ),
     RobotStatusSensorDescription(
         key="boundary_perception",

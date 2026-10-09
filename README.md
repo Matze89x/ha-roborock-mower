@@ -42,8 +42,11 @@ Was sich in welcher Version geändert hat, steht in den
   selbst gefragt (lokal oder über MQTT, nicht über die begrenzte Cloud-Schnittstelle):
   jede Minute beim Mähen, sonst alle 30 Minuten und sofort nach einer Statusänderung.
 - **Einstellungen ändern** – Mäheffizienz (Standard / Effizient / Feinschnitt),
-  Kantenschnitt beim Mähen (Schalter), Mährichtung (Winkel in 5°-Schritten),
-  Schnitthöhe (wo das Modell sie hat)
+  Kantenschnitt beim Mähen (Schalter), Richtungsmodus (Auto / Optimal /
+  Benutzerdefiniert), Richtungsänderung je Mähvorgang (15/30/60/90°), Winkel für
+  „Benutzerdefiniert“ (5°-Schritte), Schnitthöhe (wo das Modell sie hat). Zonen,
+  die in der App eigene Einstellungen haben, stehen als Attribut dabei – für sie
+  gelten die globalen Einstellungen nicht
 - **Zone mähen: …** (eine Taste pro gespeicherter Zone) – startet das Zonenmähen
 - **Routinen** aus der Roborock-App erscheinen als Tasten
 - **Aktionen** `roborock_mower.mow_areas` (Zonen mähen),
@@ -181,8 +184,10 @@ What changed in which version is listed in the
   rate-limited cloud API): every minute while mowing, otherwise every 30 minutes
   and right after a state change.
 - **Change settings** – mowing efficiency (Standard / Efficient / Manicure), edge
-  cut while mowing (switch), mowing direction (angle in 5° steps), cutting height
-  (where the model has it)
+  cut while mowing (switch), direction mode (Auto / Optimal / Custom), direction
+  change per mow (15/30/60/90°), angle for "Custom" (5° steps), cutting height
+  (where the model has it). Zones with their own settings in the app are listed
+  as an attribute – the global settings don't apply to them
 - **Mow zone: …** – one button per saved area starts a zone mow
 - **Routines** from the Roborock app appear as buttons
 - **Actions** `roborock_mower.mow_areas`, `roborock_mower.list_areas`,
