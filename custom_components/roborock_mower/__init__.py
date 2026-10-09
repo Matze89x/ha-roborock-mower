@@ -197,6 +197,7 @@ async def _app_query_names(
 async def _scan(coordinator: RoborockMowerCoordinator, names: list[str]) -> dict[str, Any]:
     """Ask the mower each query, one at a time (it is a small device)."""
     answered: dict[str, Any] = {}
+    acknowledged: list[str] = []
     rejected: list[str] = []
     failed: dict[str, str] = {}
     for name in names:
@@ -210,10 +211,14 @@ async def _scan(coordinator: RoborockMowerCoordinator, names: list[str]) -> dict
         except RoborockException as err:
             failed[name] = str(err)[:200]
         else:
-            answered[name] = shorten_long_strings(redact_private(answer))
+            if answer in (["ok"], "ok"):
+                acknowledged.append(name)  # accepted, but no data in the answer
+            else:
+                answered[name] = shorten_long_strings(redact_private(answer))
     return {
         "tried": len(names),
         "answered": answered,
+        "acknowledged": acknowledged,
         "rejected": rejected,
         "failed": failed,
     }

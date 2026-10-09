@@ -34,6 +34,11 @@ TO_REDACT = {"gps_coordinate", "local_key", "sn", "duid", "lat", "lon"}
 PROBE_QUERIES = (
     "GET_ROBOT_STATUS",
     "GET_MOW_PREFERENCE_CONFIG",
+    "GET_USER_MODE_CONFIG",
+    "GET_FAULT_RECORDS",
+    "GET_ZONES_PLAN_INFO",
+    "GET_FEATURE_INFO",
+    "GET_MCU_VERSION",
     "GET_HEIGHT_MOTOR_PARAMETER",
     "GET_MAP_NAMES",
 )
@@ -72,6 +77,7 @@ def _mower_diagnostics(
     return {
         "name": device.name,
         "model": product.model,
+        "model_name": coordinator.model_name,
         "product_name": product.name,
         "category": str(product.category),
         "firmware": device.fv,

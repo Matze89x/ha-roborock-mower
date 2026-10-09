@@ -283,3 +283,27 @@ integration creates entities only for listed data points.
 (passes), `direction` (°), `direction_type` (`AUTO_DEFLECTION`),
 `rotation_angle` (° per mow), `boundary_perception` (`INTELLIGENCE`),
 `keep_edge` (1/0), `effective` (efficiency mode).
+
+---
+
+## 10. Further queries (found in the app plugin)
+
+`scan_queries` reads the request names from the official app plugin (Hermes
+bytecode; the string table gives the exact names). On a Q105 these answer with
+data – samples in [`docs/captures`](docs/captures):
+
+| query | used for |
+|-------|----------|
+| `GET_USER_MODE_CONFIG` | `rainfall_config.enable` / `.delay_time` (h) / `.type` → rain protection, wait after rain, rain status; `not_disturb_config.enable` / `.time[0].start/end` → do not disturb (+ "time now"); `anti_theft_config.enable` / `.e_fence_range` (m); `nav_common_config.*` → navigation mode and camera options. `random_gngga_config` is redacted. |
+| `GET_FAULT_RECORDS` | `fault_records.cards[]`: `e_code`, `occur_count`, `items[].fault_time` (date) / `.task_type` → last fault (code, date), stored faults |
+| `GET_ZONES_PLAN_INFO` | `zones_plan_info.zones_plan_info[]`: zone `id` / `name` / `plan_id[]` → number of schedules (the details of each plan are still unknown) |
+| `GET_FEATURE_INFO` (= `sku_info` of `GET_SKU_INFO` + features) | `sku_info.market_name` (`Q105`) → device model, rated / real cut area, battery (Ah), blade disc (mm), positioning (`RTK_VISION`) |
+| `GET_MCU_VERSION`, `GET_PROJECT` | controller firmware versions, project name (`BUTCHART`) – diagnostics only |
+| `GET_ROBOT_NETWORK_INFO`, `GET_ROBOT_BLUETOOTH_INFO` | the `network` / `bluetooth` parts of the status (private, redacted) |
+| `GET_DOCK_PAIRED_STATUS`, `GET_DOCK_PAIR_RESULT`, `GET_ESIM_*`, `GET_BIT_CHECK_LISTS`, `GET_INSTALLATION_WIZARD`, `GET_*_SELF_CHECK_RESULT`, `GET_RTK_DEVICE_TYPE`, `GET_MAP_ABSTRACTS` | not used yet |
+
+Some names are accepted with a bare `["ok"]` (`GET_BOOT_INFO`, `GET_MAP_DIFF`,
+`GET_MOWING_ZONES`, `GET_SELF_CHECK_STATUS`, …): the data, if any, comes another
+way. The integration reads `GET_USER_MODE_CONFIG`, `GET_FAULT_RECORDS` and
+`GET_ZONES_PLAN_INFO` together with the mowing preferences (every 30 minutes,
+after a settings change or a new error) and `GET_FEATURE_INFO` once.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import struct
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 import zipfile
@@ -14,6 +15,7 @@ from homeassistant.helpers import device_registry as dr
 from custom_components.roborock_mower.app_plugin import (
     HERMES_MAGIC,
     extract_query_names,
+    hermes_strings,
 )
 from custom_components.roborock_mower.const import DOMAIN
 from custom_components.roborock_mower.vendor.roborock.exceptions import (
@@ -61,8 +63,50 @@ def test_extract_query_names_from_a_plugin_archive() -> None:
     assert extract_query_names(b"nothing here") == []
 
 
+def _hermes(storage: bytes, small: list[tuple[int, int]], overflow: list[tuple[int, int]]) -> bytes:
+    """A minimal Hermes bytecode file: header, 1 function, 1 string kind, tables."""
+    header = bytearray(128)
+    header[:8] = HERMES_MAGIC
+    struct.pack_into("<I", header, 8, 96)  # bytecode version
+    struct.pack_into(
+        "<6I", header, 40, 1, 1, 0, len(small), len(overflow), len(storage)
+    )
+    entries = b"".join(
+        struct.pack("<I", (offset << 1) | (length << 24)) for offset, length in small
+    )
+    overflow_table = b"".join(struct.pack("<II", *entry) for entry in overflow)
+    return (
+        bytes(header)
+        + bytes(16)  # function header
+        + bytes(4)  # string kind
+        + entries
+        + overflow_table
+        + storage
+        + bytes(-len(storage) % 4)
+    )
+
+
+def test_extract_exact_names_from_the_hermes_string_table() -> None:
+    """Overlapping strings: the table says where each one starts and ends."""
+    storage = b"GET_FEATURESET_NEW_PIN_CODEisArrayGET_PLAN_INFO"
+    blob = _hermes(
+        storage,
+        small=[(0, 11), (11, 16), (27, 7), (0, 255)],  # the last one overflows
+        overflow=[(34, 13)],
+    )
+    assert hermes_strings(blob) == [
+        "GET_FEATURE",
+        "SET_NEW_PIN_CODE",
+        "isArray",
+        "GET_PLAN_INFO",
+    ]
+    assert extract_query_names(_zip({"main.hbc": blob})) == ["GET_FEATURE", "GET_PLAN_INFO"]
+    # A table pointing past the strings is not trusted.
+    assert hermes_strings(_hermes(storage, small=[(40, 20)], overflow=[])) is None
+
+
 def test_extract_query_names_from_hermes_bytecode() -> None:
-    """Hermes keeps strings back to back, without quotes."""
+    """Without a readable table: runs after GET_, split at GET_."""
     blob = (
         HERMES_MAGIC
         + b"\x00\x01isArrayGET_ROBOT_STATUSGET_PLAN_INFOlengthGET_CONSUMABLE_STATE_"
@@ -147,6 +191,7 @@ async def test_scan_uses_the_names_from_the_app_plugin(
     assert result["answered"]["GET_PLAN_INFO"]["plans"][0]["days"] == ["FRIDAY"]
     assert result["answered"]["GET_ROBOT_STATUS"]["network"]["ip"] == "**REDACTED**"
     assert result["rejected"] == ["GET_CONSUMABLE_STATE"]
+    assert result["acknowledged"] == []
     # Signed plugin links never end up in the answer.
     assert "files.example.com" not in json.dumps(result)
 

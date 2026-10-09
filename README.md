@@ -32,7 +32,10 @@ Was sich in welcher Version geändert hat, steht in den
   geschätzte Mähdauer, nächster geplanter Mähvorgang, letztes Mähen (Beginn, Ende,
   Dauer, Fläche, Abdeckung, Endgrund, abgebrochen ja/nein); unter **Diagnose**
   WLAN-Signal, Verbindungsweg, Mobilfunk (4G), RTK-Positionsbestimmung, letztes
-  Ereignis. Viele weitere Werte (WLAN-Qualität, RTK-Modus, LoRa, Diebstahlschutz,
+  Ereignis, letzter Fehler (Code und Datum aus dem Fehlerverlauf), Regenschutz und
+  Wartezeit nach Regen, Nicht stören (und ob die Zeit gerade läuft),
+  Diebstahlschutz, Anzahl der Mähpläne; das Gerät zeigt das genaue Modell (z. B.
+  RockNeo Q105). Viele weitere Werte (WLAN-Qualität, RTK-Modus, LoRa, Diebstahlschutz,
   Energie- und Systemzustände, Karte, Mäheinstellungen wie Mährichtung und
   Durchgänge, Hinderniserkennung, Kantenschneider …) sind ebenfalls unter
   **Diagnose** vorhanden, aber standardmäßig deaktiviert. Der Mäher wird dafür
@@ -164,7 +167,10 @@ What changed in which version is listed in the
   area, estimated mowing time, next scheduled mow, last mow (start, end,
   duration, area, coverage, end reason, aborted yes/no); under **Diagnostic**
   Wi-Fi signal, connection route, mobile network (4G), RTK positioning, last
-  event. Many more values (Wi-Fi quality, RTK mode, LoRa, anti-theft, energy and
+  event, last fault (code and date from the fault history), rain protection and
+  wait after rain, do not disturb (and whether its time is now), anti-theft,
+  number of schedules; the device shows the exact model (e.g. RockNeo Q105).
+  Many more values (Wi-Fi quality, RTK mode, LoRa, anti-theft, energy and
   system states, map, mowing preferences such as direction and passes, obstacle
   avoidance, edge trimmer, …) are under **Diagnostic** too, disabled by default.
   They are asked from the mower itself (locally or via MQTT, never the

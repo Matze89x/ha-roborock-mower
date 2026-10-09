@@ -1,0 +1,6 @@
+{
+  "type": "MAP_SELF_CHECK_RESULT",
+  "runtime_task": "MAP",
+  "runtime_state": "IDLE",
+  "fsm_errors": {}
+}

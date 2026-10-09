@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import io
 import re
+import struct
 from typing import Any
 import zipfile
 
@@ -26,12 +27,18 @@ from .vendor.roborock.web_api import RoborockApiClient
 
 # A request type name as a whole word: GET_ROBOT_STATUS, not xGET_Y or GET_Ya.
 QUERY_NAME_RE = re.compile(rb"(?<![A-Za-z0-9_])GET_[A-Z][A-Z0-9_]{1,62}(?![A-Za-z0-9_])")
-# Compiled (Hermes) bundles keep their strings back to back without quotes
-# ("GET_AGET_BisArray"): take every run after "GET_" and split it at "GET_".
+# Compiled (Hermes) bundles keep their strings back to back, even
+# overlapping ("GET_FEATURE" + "SET_NEW_PIN_CODE" = "GET_FEATURESET_NEW_PIN_CODE").
+# Their string table says where each string starts and ends.
 HERMES_MAGIC = b"\xc6\x1f\xbc\x03\xc1\x03\x19\x1f"
+_HERMES_HEADER_SIZE = 128
+_HERMES_FUNCTION_HEADER_SIZE = 16
+_OVERFLOWED = 255
+# Fallback when the table can't be read: every run after "GET_", split at "GET_".
 _RUN_RE = re.compile(rb"GET_[A-Z0-9_]+")
 _SPLIT_RE = re.compile(rb"(?=GET_)")
 _NAME_RE = re.compile(rb"GET_[A-Z][A-Z0-9_]{1,62}")
+_NAME_STR_RE = re.compile(r"GET_[A-Z][A-Z0-9_]{1,62}")
 # Known and huge (the whole map as base64); not worth a scan.
 SKIP_QUERIES = frozenset({"GET_FULL_MAP"})
 MAX_DOWNLOAD_BYTES = 128 * 1024 * 1024
@@ -39,9 +46,50 @@ MAX_UNPACKED_BYTES = 512 * 1024 * 1024
 DOWNLOAD_TIMEOUT = 180
 
 
+def hermes_strings(blob: bytes) -> list[str] | None:
+    """The (ASCII) strings of a Hermes bytecode file, from its string table.
+
+    None when the file does not have the expected layout. Header: magic,
+    version, source hash, file length, global code index, then the counts
+    read here; sections follow the 128-byte header in this order.
+    """
+    if len(blob) < _HERMES_HEADER_SIZE or not blob.startswith(HERMES_MAGIC):
+        return None
+    functions, kinds, identifiers, count, overflow_count, storage_size = struct.unpack_from(
+        "<6I", blob, 40
+    )
+    small_at = (
+        _HERMES_HEADER_SIZE
+        + functions * _HERMES_FUNCTION_HEADER_SIZE
+        + kinds * 4
+        + identifiers * 4
+    )
+    overflow_at = small_at + count * 4
+    storage_at = overflow_at + overflow_count * 8
+    if storage_at + storage_size > len(blob):
+        return None
+    overflow = struct.unpack_from(f"<{overflow_count * 2}I", blob, overflow_at)
+    strings: list[str] = []
+    for (entry,) in struct.iter_unpack("<I", blob[small_at:overflow_at]):
+        utf16, offset, length = entry & 1, (entry >> 1) & 0x7FFFFF, entry >> 24
+        if length == _OVERFLOWED:
+            if offset >= overflow_count:
+                return None
+            offset, length = overflow[offset * 2], overflow[offset * 2 + 1]
+        size = length * 2 if utf16 else length
+        if offset + size > storage_size:
+            return None
+        if not utf16:  # request names are ASCII
+            start = storage_at + offset
+            strings.append(blob[start : start + size].decode("latin-1"))
+    return strings
+
+
 def _names_in(blob: bytes) -> set[str]:
     if not blob.startswith(HERMES_MAGIC):
         return {match.decode() for match in QUERY_NAME_RE.findall(blob)}
+    if (strings := hermes_strings(blob)) is not None:
+        return {text for text in strings if _NAME_STR_RE.fullmatch(text)}
     names: set[str] = set()
     for run in _RUN_RE.findall(blob):
         for part in _SPLIT_RE.split(run):

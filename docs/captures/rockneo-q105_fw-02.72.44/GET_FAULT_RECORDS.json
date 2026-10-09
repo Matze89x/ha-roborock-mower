@@ -1,0 +1,157 @@
+{
+  "type": "FAULT_RECORDS",
+  "fault_records": {
+    "cards": [
+      {
+        "e_code": 10,
+        "occur_count": 1,
+        "items": [
+          {
+            "fault_time": "2026-09-13",
+            "task_type": "DOCK"
+          }
+        ]
+      },
+      {
+        "e_code": 16,
+        "occur_count": 11,
+        "items": [
+          {
+            "fault_time": "2026-09-30",
+            "task_type": "RUNTIME"
+          },
+          {
+            "fault_time": "2026-09-28",
+            "task_type": "RUNTIME"
+          },
+          {
+            "fault_time": "2026-09-18",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-18",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-13",
+            "task_type": "RUNTIME"
+          },
+          {
+            "fault_time": "2026-09-11",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-11",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-11",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-09",
+            "task_type": "RUNTIME"
+          }
+        ]
+      },
+      {
+        "e_code": 18,
+        "occur_count": 1,
+        "items": [
+          {
+            "fault_time": "2026-09-28",
+            "task_type": "RUNTIME"
+          }
+        ]
+      },
+      {
+        "e_code": 19,
+        "occur_count": 2,
+        "items": [
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "RUNTIME"
+          },
+          {
+            "fault_time": "2026-09-11",
+            "task_type": "RUNTIME"
+          }
+        ]
+      },
+      {
+        "e_code": 35,
+        "occur_count": 3,
+        "items": [
+          {
+            "fault_time": "2026-10-02",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-23",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-22",
+            "task_type": "MOW"
+          }
+        ]
+      },
+      {
+        "e_code": 38,
+        "occur_count": 4,
+        "items": [
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "DOCK"
+          },
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "DOCK"
+          },
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-13",
+            "task_type": "DOCK"
+          }
+        ]
+      },
+      {
+        "e_code": 55,
+        "occur_count": 5,
+        "items": [
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "DOCK"
+          },
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "DOCK"
+          },
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "DOCK"
+          },
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "MOW"
+          },
+          {
+            "fault_time": "2026-09-15",
+            "task_type": "MOW"
+          }
+        ]
+      }
+    ]
+  }
+}

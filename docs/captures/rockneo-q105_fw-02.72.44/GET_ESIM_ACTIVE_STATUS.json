@@ -1,0 +1,8 @@
+{
+  "type": "ESIM_ACTIVE_STATUS",
+  "esim_active_status": {
+    "has_4g": false,
+    "active_status": "UNKNOWN",
+    "mobile_operator": "unknown"
+  }
+}

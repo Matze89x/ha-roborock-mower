@@ -8,7 +8,7 @@ Paths below were taken from a live RockNeo Q105 (firmware 02.72.44).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time as dt_time, timedelta
 from typing import Any
 
@@ -27,8 +27,19 @@ PRIVATE_KEYS = frozenset(
         "ip",
         "ssid",
         "bssid",
+        "ip_addr",
         # mac + a name derived from it
         "bluetooth",
+        # mobile network: SIM and modem identifiers
+        "iccid",
+        "imei",
+        "imsi",
+        "eid",
+        "msisdn",
+        # seeds the position the mower reports to RTK correction services
+        "random_gngga_config",
+        "sn",
+        "serial_number",
     }
 )
 REDACTED = "**REDACTED**"
@@ -43,6 +54,9 @@ class RobotInfo:
     now: datetime  # aware, in Home Assistant's time zone
     updated: datetime | None = None  # when the status was last read
     local_connected: bool | None = None
+    # Further answers by type (USER_MODE_CONFIG, FAULT_RECORDS, ...).
+    extra: dict[str, Any] = field(default_factory=dict)
+
 
 WEEKDAYS = (
     "MONDAY",
@@ -201,3 +215,21 @@ def last_item(value: Any) -> Any:
     if isinstance(value, list) and value:
         return value[-1]
     return None
+
+
+def clock(value: Any) -> str | None:
+    """``{"hour": 20, "minute": 30}`` as ``"20:30"`` (absent fields are 0)."""
+    if not isinstance(value, dict):
+        return None
+    try:
+        return f"{int(value.get('hour') or 0):02d}:{int(value.get('minute') or 0):02d}"
+    except (TypeError, ValueError):
+        return None
+
+
+def in_daily_window(start: str, end: str, now: datetime) -> bool:
+    """Whether ``now`` lies in a daily ``HH:MM`` window (may span midnight)."""
+    current = now.strftime("%H:%M")
+    if start <= end:
+        return start <= current < end
+    return current >= start or current < end

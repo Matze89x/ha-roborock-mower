@@ -1,0 +1,21 @@
+{
+  "type": "INSTALLATION_WIZARD",
+  "installation_wizard": {
+    "pincode": {
+      "type": "PINCODE",
+      "result": true
+    },
+    "siting_install": {
+      "type": "SITING_INSTALL",
+      "result": true
+    },
+    "signal_check": {
+      "type": "SIGNAL_CHECK",
+      "result": true
+    },
+    "activation_4g": {
+      "type": "ACTIVATION_4G",
+      "result": true
+    }
+  }
+}

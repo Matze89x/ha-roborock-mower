@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -13,6 +13,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -44,7 +45,7 @@ from .mower_api import (
     derive_activity,
     redact_dps,
 )
-from .robot_status import redact_private
+from .robot_status import dig, redact_private
 from .storage import MowerCacheStore
 from .vendor.roborock.data import HomeDataDevice, HomeDataProduct, UserData
 from .vendor.roborock.exceptions import RoborockException, RoborockInvalidCredentials
@@ -85,6 +86,11 @@ STATUS_TRIGGER_DPS = frozenset(
     }
 )
 _BUSY_ACTIVITIES = frozenset({ACTIVITY_MOWING, ACTIVITY_PAUSED, ACTIVITY_RETURNING})
+# Read with the mowing preferences (every 30 minutes, after a settings change
+# or an error): rain / do-not-disturb / anti-theft settings, the fault
+# history and the schedules per zone. The product details only once.
+SETTINGS_QUERIES = ("GET_USER_MODE_CONFIG", "GET_FAULT_RECORDS", "GET_ZONES_PLAN_INFO")
+ONCE_QUERIES = ("GET_FEATURE_INFO",)
 
 
 class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
@@ -135,8 +141,10 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self.robot_status_time: datetime | None = None
         self._status_wakeup = asyncio.Event()
         self._status_failing = False
-        self._preference_due = True
-        self._preference_read_at: float | None = None
+        # Further answers by type ("USER_MODE_CONFIG", ...), redacted.
+        self.extra: dict[str, dict[str, Any]] = {}
+        self._settings_due = True
+        self._settings_read_at: float | None = None
 
     async def _async_update_data(self) -> MowerStatus:
         api = self.mower_api
@@ -187,6 +195,22 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
     # -- full robot status (GET_ROBOT_STATUS) ----------------------------------
 
     @property
+    def model_name(self) -> str:
+        """The product name with the exact model (``RockNeo Q1`` -> ``RockNeo Q105``)."""
+        name = self.product.name or self.product.model
+        market = dig(self.extra.get("FEATURE_INFO"), "feature_info", "sku_info", "market_name")
+        if not isinstance(market, str) or not market or market in name:
+            return name
+        family = name.rsplit(" ", 1)[0] if " " in name else name
+        return f"{family} {market}"
+
+    def _update_device_model(self) -> None:
+        registry = dr.async_get(self.hass)
+        device = registry.async_get_device(identifiers={(DOMAIN, self.device.duid)})
+        if device is not None and device.model != self.model_name:
+            registry.async_update_device(device.id, model=self.model_name)
+
+    @property
     def mow_preference(self) -> dict[str, Any] | None:
         """The global mowing preference (passes, direction, ...), if known."""
         cfg = self.mower_api.preference_config
@@ -197,8 +221,8 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         """React to a live data-point push: re-read the full status if useful."""
         if not changes & STATUS_TRIGGER_DPS:
             return
-        if DPS_MOW_EFF_MODE in changes:
-            self._preference_due = True
+        if changes & {DPS_MOW_EFF_MODE, DPS_ERROR_CODE}:
+            self._settings_due = True
         self._status_wakeup.set()
 
     def _robot_status_interval(self) -> float:
@@ -257,16 +281,39 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self.robot_status = redact_private(answer)
         self.robot_status_time = dt_util.utcnow()
         if (
-            self._preference_due
-            or self._preference_read_at is None
-            or time.monotonic() - self._preference_read_at
+            self._settings_due
+            or self._settings_read_at is None
+            or time.monotonic() - self._settings_read_at
             > PREFERENCE_REFRESH_INTERVAL.total_seconds()
         ):
-            try:
-                async with asyncio.timeout(ROBOT_STATUS_TIMEOUT):
-                    if await api.get_mow_preference_config(record=False) is not None:
-                        self._preference_due = False
-                        self._preference_read_at = time.monotonic()
-            except (RoborockException, TimeoutError):
-                pass
+            await self._async_refresh_settings()
         self.async_update_listeners()
+
+    async def _async_refresh_settings(self) -> None:
+        """Read the preferences, settings, fault history and plans."""
+        api = self.mower_api
+        if await _quietly(api.get_mow_preference_config(record=False)) is not None:
+            self._settings_due = False
+            self._settings_read_at = time.monotonic()
+        queries = SETTINGS_QUERIES + tuple(
+            query for query in ONCE_QUERIES if query.removeprefix("GET_") not in self.extra
+        )
+        for query in queries:
+            # Models that lack a query reject it; it is simply tried again later.
+            answer = await _quietly(api.get_info(query, record=False))
+            if answer is None:
+                continue
+            key = query.removeprefix("GET_")
+            first = key not in self.extra
+            self.extra[key] = redact_private(answer)
+            if key == "FEATURE_INFO" and first:
+                self._update_device_model()
+
+
+async def _quietly(call: Coroutine[Any, Any, Any]) -> Any:
+    """An answer of the mower, or None if it fails or takes too long."""
+    try:
+        async with asyncio.timeout(ROBOT_STATUS_TIMEOUT):
+            return await call
+    except (RoborockException, TimeoutError):
+        return None

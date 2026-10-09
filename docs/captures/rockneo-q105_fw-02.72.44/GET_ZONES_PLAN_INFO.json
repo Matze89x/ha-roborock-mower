@@ -1,0 +1,16 @@
+{
+  "type": "ZONES_PLAN_INFO",
+  "zones_plan_info": {
+    "zones_plan_info": [
+      {
+        "id": 2,
+        "name": "Garten",
+        "plan_id": [
+          2848231976,
+          2204435469,
+          471772864
+        ]
+      }
+    ]
+  }
+}

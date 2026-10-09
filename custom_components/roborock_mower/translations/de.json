@@ -74,6 +74,30 @@
       },
       "keep_edge": {
         "name": "Am Rand entlang mähen"
+      },
+      "rain_protection": {
+        "name": "Regenschutz"
+      },
+      "do_not_disturb": {
+        "name": "Nicht stören"
+      },
+      "do_not_disturb_active": {
+        "name": "Nicht-stören-Zeit läuft"
+      },
+      "anti_theft_enabled": {
+        "name": "Diebstahlschutz eingeschaltet"
+      },
+      "path_obstacle_detection": {
+        "name": "Hinderniserkennung auf Wegen"
+      },
+      "edge_camera_avoidance": {
+        "name": "Kamera-Ausweichen am Rand"
+      },
+      "passage_camera_avoidance": {
+        "name": "Kamera-Ausweichen in Durchgängen"
+      },
+      "obstacle_photo_privacy": {
+        "name": "Datenschutz für Hindernisfotos"
       }
     },
     "sensor": {
@@ -414,6 +438,54 @@
         "state": {
           "intelligence": "Intelligent"
         }
+      },
+      "plan_count": {
+        "name": "Mähpläne"
+      },
+      "last_fault": {
+        "name": "Letzter Fehler (Code)"
+      },
+      "last_fault_date": {
+        "name": "Letzter Fehler am"
+      },
+      "rain_delay": {
+        "name": "Wartezeit nach Regen"
+      },
+      "rain_state": {
+        "name": "Regenstatus",
+        "state": {
+          "rain_no": "Kein Regen"
+        }
+      },
+      "anti_theft_range": {
+        "name": "Diebstahlschutz: Radius"
+      },
+      "navigation_mode": {
+        "name": "Navigationsmodus",
+        "state": {
+          "more_coverage": "Mehr Abdeckung"
+        }
+      },
+      "fault_count": {
+        "name": "Gespeicherte Fehler"
+      },
+      "positioning": {
+        "name": "Ortung",
+        "state": {
+          "rtk_vision": "RTK + Kamera"
+        }
+      },
+      "rated_area": {
+        "name": "Empfohlene Rasenfläche"
+      },
+      "max_area": {
+        "name": "Maximale Rasenfläche"
+      },
+      "blade_diameter": {
+        "name": "Durchmesser Messerscheibe"
+      },
+      "battery_capacity": {
+        "name": "Akkukapazität"
       }
     },
     "number": {

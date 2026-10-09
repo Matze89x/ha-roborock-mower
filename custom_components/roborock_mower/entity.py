@@ -42,7 +42,7 @@ class RoborockMowerEntity(CoordinatorEntity[RoborockMowerCoordinator]):
             identifiers={(DOMAIN, self._device.duid)},
             name=self._device.name,
             manufacturer="Roborock",
-            model=self._product.name or self._product.model,
+            model=self.coordinator.model_name,
             model_id=self._product.model,
             serial_number=self._device.sn,
             sw_version=self._device.fv,
@@ -68,6 +68,7 @@ class RoborockMowerEntity(CoordinatorEntity[RoborockMowerCoordinator]):
             local_connected=getattr(
                 coordinator.mower_api.channel, "is_local_connected", None
             ),
+            extra=coordinator.extra,
         )
 
     async def _async_send(

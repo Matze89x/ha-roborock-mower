@@ -861,8 +861,22 @@ class MowerApi:
         Raw answer: it contains the mower's GPS position and network details,
         so callers redact it before showing or exporting it.
         """
-        resp = await self._query({"type": TYPE_GET_ROBOT_STATUS}, record=record)
-        if not isinstance(resp, dict) or resp.get("type", "ROBOT_STATUS") != "ROBOT_STATUS":
+        return await self.get_info(TYPE_GET_ROBOT_STATUS, record=record)
+
+    async def get_info(
+        self, query_type: str, *, record: bool = True
+    ) -> dict[str, Any] | None:
+        """Answer of a ``GET_*`` info query (``GET_USER_MODE_CONFIG`` ...), or None.
+
+        None when the mower answers with something else than the matching
+        ``{"type": "USER_MODE_CONFIG", ...}`` object. Raw: callers redact it.
+        """
+        resp = await self._query({"type": query_type}, record=record)
+        if not isinstance(resp, dict):
+            return None
+        if resp.get("type", query_type.removeprefix("GET_")) != query_type.removeprefix(
+            "GET_"
+        ):
             return None
         return resp
 

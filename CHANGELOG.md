@@ -3,6 +3,52 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.2.2 – Settings, fault history and schedules from the mower
+
+**Kurzfassung (Deutsch):** Mit den Abfragenamen aus der Roborock-App hat der
+Mäher 37 Abfragen beantwortet. Daraus kommen jetzt:
+- **letzter Fehler:** Code und Datum aus dem Fehlerverlauf
+- **Regenschutz** und **Wartezeit nach Regen**
+- **Nicht stören** mit Zeitfenster, dazu ein Sensor, ob die Nicht-stören-Zeit
+  gerade läuft
+- **Diebstahlschutz** (an/aus)
+- **Anzahl der Mähpläne**
+
+Viele Details sind ebenfalls dabei, standardmäßig deaktiviert: Regenstatus,
+Diebstahlschutz-Radius, Navigationsmodus, Kamera-Optionen, gespeicherte Fehler,
+Ortung, empfohlene und maximale Fläche, Messerscheibe, Akkukapazität. Das Gerät
+zeigt jetzt das genaue Modell (z. B. „RockNeo Q105“ statt „RockNeo Q1“). Die
+Suche nach Abfragenamen liest die App jetzt exakt aus. Bisher waren dabei
+manche Namen mit ihren Nachbarn verklebt (z. B. `GET_FEATURESET_NEW_PIN_CODE`).
+SIM- und Modemkennungen sowie der RTK-Positionswert werden zusätzlich
+geschwärzt.
+
+### New
+
+- Settings from `GET_USER_MODE_CONFIG`, fault history from
+  `GET_FAULT_RECORDS`, schedules per zone from `GET_ZONES_PLAN_INFO`, read
+  together with the mowing preferences (every 30 minutes, after a settings
+  change or a new error); product details from `GET_FEATURE_INFO` once.
+- Sensors: mowing schedules (count, zones as attribute); diagnostic: last
+  fault (code; date, task and the whole history as attributes), last fault
+  date, wait after rain; disabled: rain status, anti-theft radius, navigation
+  mode, stored faults, positioning, rated / maximum lawn area, blade disc
+  diameter, battery capacity.
+- Binary sensors (diagnostic): rain protection, do not disturb (start / end
+  as attributes), do-not-disturb time now, anti-theft enabled; disabled:
+  obstacle detection on paths, camera avoidance at the edge / in passages,
+  obstacle photo privacy.
+- The device model is the exact one from the mower (`sku_info.market_name`).
+- `scan_queries`: names come from the Hermes string table of the app plugin
+  (exact, also for overlapping strings), with the old split as fallback;
+  answers that are just `["ok"]` are listed under `acknowledged`.
+- Diagnostics probe the new queries too. More captures in `docs/`.
+
+### Fixes
+
+- Redact SIM / modem identifiers (`iccid`, `imei`, `imsi`, `eid`, `msisdn`),
+  `ip_addr`, serial numbers and `random_gngga_config` in every answer.
+
 ## 0.2.1 – Real query names, hardware errors, open data
 
 **Kurzfassung (Deutsch):** Die Aktion „Mäher-Abfragen durchsuchen“ rät nicht
