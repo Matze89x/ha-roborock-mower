@@ -1,20 +1,20 @@
 name: Release
 
-# Creates the GitHub release HACS installs from. Either push a tag "vX.Y.Z"
-# whose version matches manifest.json, or run this workflow by hand with the
-# tag (and, if the tag does not exist yet, the commit to put it on -- default:
-# the tip of the branch it runs on). The release text is that version's
-# section of CHANGELOG.md.
+# Publishes the GitHub release HACS installs from -- automatically: whenever
+# main gets a manifest.json version that has no release yet, this creates the
+# tag vX.Y.Z on that commit and the release, with that version's section of
+# CHANGELOG.md as text. Run it by hand only to publish an older version
+# (tag + commit).
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Version tag to release, e.g. v0.1.1"
+        description: "Older version tag to publish, e.g. v0.1.0"
         required: true
       target:
-        description: "Commit to tag if the tag does not exist yet (default: branch tip)"
+        description: "Commit to tag if the tag does not exist yet"
         required: false
 
 permissions:
@@ -24,44 +24,50 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ inputs.tag || github.ref_name }}
-      TARGET: ${{ inputs.target }}
+      GH_TOKEN: ${{ github.token }}
+      INPUT_TAG: ${{ inputs.tag }}
+      INPUT_TARGET: ${{ inputs.target }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check out the commit to release
+      - name: Work out what to release
         run: |
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            git checkout -q "$TAG"
-          else
-            git checkout -q "${TARGET:-$GITHUB_SHA}"
+          if [ -n "$INPUT_TAG" ]; then
+            if git rev-parse -q --verify "refs/tags/$INPUT_TAG" >/dev/null; then
+              git checkout -q "$INPUT_TAG"
+            else
+              git checkout -q "${INPUT_TARGET:-$GITHUB_SHA}"
+            fi
           fi
-          echo "SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-
-      - name: Check that the tag matches manifest.json
-        run: |
-          manifest=$(python3 -c "import json; print(json.load(open('custom_components/roborock_mower/manifest.json'))['version'])")
-          if [ "${TAG#v}" != "$manifest" ]; then
-            echo "Tag $TAG does not match manifest version $manifest"
+          version=$(python3 -c "import json; print(json.load(open('custom_components/roborock_mower/manifest.json'))['version'])")
+          tag="${INPUT_TAG:-v$version}"
+          if [ "${tag#v}" != "$version" ]; then
+            echo "Tag $tag does not match manifest version $version"
             exit 1
           fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists already -- nothing to do."
+            echo "RELEASE_SKIP=true" >> "$GITHUB_ENV"
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Release notes from CHANGELOG.md
+        if: env.RELEASE_SKIP != 'true'
         run: |
-          awk -v v="${TAG#v}" '$0 == "## " v || index($0, "## " v " ") == 1 {found=1; next} found && /^## / {exit} found {print}' CHANGELOG.md > notes.md
+          awk -v v="${RELEASE_TAG#v}" '$0 == "## " v || index($0, "## " v " ") == 1 {found=1; next} found && /^## / {exit} found {print}' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "See CHANGELOG.md" > notes.md
           cat notes.md
 
       - name: Create the release
-        env:
-          GH_TOKEN: ${{ github.token }}
+        if: env.RELEASE_SKIP != 'true'
         run: |
           # Only the highest version is marked "latest", so publishing an
           # older version afterwards does not demote the current release.
-          highest=$( (git tag --list 'v*'; echo "$TAG") | sort -V | tail -n 1)
+          highest=$( (git tag --list 'v*'; echo "$RELEASE_TAG") | sort -V | tail -n 1)
           latest=false
-          [ "$TAG" = "$highest" ] && latest=true
-          gh release create "$TAG" --target "$SHA" --title "${TAG#v}" \
-            --notes-file notes.md --latest="$latest"
+          [ "$RELEASE_TAG" = "$highest" ] && latest=true
+          gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" \
+            --title "${RELEASE_TAG#v}" --notes-file notes.md --latest="$latest"

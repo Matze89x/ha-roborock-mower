@@ -380,6 +380,11 @@ python3.14 -m venv .venv
 Also run Home Assistant's validator (`hassfest`) — the GitHub workflow in
 `.github/workflows/validate.yml` runs hassfest, the HACS validation and the tests.
 
+**Releasing:** bump `version` in `manifest.json` and add a `## X.Y.Z` section to
+`CHANGELOG.md` in the same pull request. When it is merged into `main`,
+`.github/workflows/release.yml` creates the tag `vX.Y.Z` and the GitHub release
+(with that section as text) automatically; HACS offers it right away.
+
 ---
 
 ## 9. Status: confirmed vs. open

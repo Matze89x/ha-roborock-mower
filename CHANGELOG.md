@@ -1,5 +1,8 @@
 # Changelog
 
+Source of the release notes: each version's section becomes the text of its
+[GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
+
 ## 0.1.1 – fixes from the first live test (RockNeo Q105)
 
 **Kurzfassung (Deutsch):** Statuswerte erscheinen jetzt übersetzt (Deutsch/Englisch)
@@ -46,9 +49,9 @@ Library schreibt nicht mehr hunderte MB ins Debug-Log.
 - Efficiency mode options are translated (Daily/Täglich, Efficient/Effizient,
   Manicure/Feinschnitt). Their state values are now lowercase (`daily`, …);
   update automations that compared against `Daily`.
-- GitHub releases (`.github/workflows/release.yml`): pushing a `vX.Y.Z` tag, or
-  running the workflow by hand with the tag, creates the release from this
-  changelog; HACS then offers the versions.
+- GitHub releases (`.github/workflows/release.yml`): as soon as a new version
+  reaches `main`, the tag and the release are created automatically with this
+  version's notes; HACS then offers the versions.
 
 ## 0.1.0 – first release of the **Roborock Mower** fork
 

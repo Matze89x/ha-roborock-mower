@@ -15,40 +15,10 @@ Home-Assistant-Integration für **Roborock-Mähroboter** (RockNeo, z. B. Q105 /
 > Die Versionierung beginnt neu bei **0.1.0**. Danke an das Original für das
 > Reverse-Engineering des Mäher-Protokolls.
 
-## Neu in 0.1.1
+## Änderungen
 
-- Statuswerte erscheinen **übersetzt** (Deutsch/Englisch) statt als Rohtexte wie
-  `charge_completed`.
-- Die **Rückfahrt zur Station** wird als „Kehrt zurück“ angezeigt statt als
-  „Angedockt“. Ein im Garten stehender Mäher zeigt „Untätig“.
-- Der **Kantenschnitt** schickt wie die App die gespeicherten Zonen mit.
-- Pro Zone gibt es eine Taste **„Zone mähen: …“**. Sie ersetzt die Auswahl „Mähzone“.
-- Die **Diagnose-Datei** enthält einen Verlauf aller Befehle und Statusänderungen.
-  Riesige Debug-Logs sind dafür nicht mehr nötig.
-
-## Neu in 0.1.0 (Kurzfassung)
-
-- **Läuft parallel zur offiziellen Roborock-Integration.** Die Integration bringt
-  ihre **eigene Kopie von python-roborock 7.12.1** (neueste Version) mit und
-  verlangt kein `python-roborock` mehr von Home Assistant. Vorher erzwang sie
-  `python-roborock <6.0`, die offizielle Integration aber 7.x – HA hat bei jedem
-  Neustart hin- und herinstalliert und die offizielle Integration brach mit
-  `ImportError` ab. Das ist behoben.
-- **Robuster Neustart:** Gerätedaten werden zwischengespeichert. Ist die Cloud
-  beim Start nicht erreichbar oder das Roborock-Abruflimit erreicht, startet die
-  Integration aus dem Cache statt mit Fehler. MQTT-Probleme direkt nach dem Booten
-  führen zu einem automatischen Neuversuch (statt dauerhaftem Fehler) ohne
-  hängende Verbindungen.
-- **Weitere Fehler behoben:** „Unable to remove unknown job listener“ beim
-  Neustart; ungültige `services.yaml`; Entitäten wurden nach einem
-  fehlgeschlagenen Cloud-Abruf für eine Stunde „nicht verfügbar“; vom Mäher
-  abgelehnte Befehle wurden still ignoriert (jetzt Fehlermeldung); Endlos-Neuversuche,
-  wenn kein Mäher gefunden wird; Log-Spam bei unbekannten Statuscodes.
-- **Neu:** Diagnose-Download, Re-Authentifizierung bei abgelaufener Anmeldung,
-  deutsche Übersetzung, Routinen/Zonen werden im Hintergrund geladen (blockieren
-  den Start nicht), automatische Tests + GitHub-Prüfung (hassfest, HACS).
-
-Alle Details: [CHANGELOG.md](CHANGELOG.md).
+Was sich in welcher Version geändert hat, steht in den
+[Releases](https://github.com/Matze89x/ha-roborock-mower/releases).
 
 ## Funktionen
 
@@ -157,37 +127,10 @@ integration** (vacuums).
 > and is developed further here as **Roborock Mower**. Versioning restarts at
 > **0.1.0**. Thanks to the original for reverse-engineering the mower protocol.
 
-## What's new in 0.1.1
+## Changes
 
-- State values are **translated** (German/English) instead of raw texts like
-  `charge_completed`.
-- **Driving back to the dock** reads "Returning" instead of "Docked". A mower
-  stopped in the garden reads "Idle".
-- The **edge cut** sends the saved areas, like the app.
-- One **"Mow zone: …"** button per saved area replaces the Mow Area select.
-- The **diagnostics** contain a history of all commands and state changes, so
-  huge debug logs are no longer needed.
-
-## What's new in 0.1.0 (summary)
-
-- **Runs alongside the official Roborock integration.** The integration bundles
-  its **own copy of python-roborock 7.12.1** (latest) and no longer requires
-  `python-roborock` from Home Assistant. It used to pin `python-roborock <6.0`
-  while the official integration pins 7.x, so HA swapped versions on every
-  restart and the official integration failed with `ImportError`s. Fixed.
-- **Robust restarts:** device data is cached. If the cloud is unreachable or the
-  Roborock request limit is reached at startup, the integration starts from the
-  cache instead of failing. MQTT problems right after boot trigger an automatic
-  retry (instead of a permanent error) without leaking connections.
-- **More fixes:** "Unable to remove unknown job listener" on restart; invalid
-  `services.yaml`; entities turning "unavailable" for an hour after one failed
-  cloud poll; commands rejected by the mower were silently ignored (now an
-  error); endless retries when no mower is found; log spam for unknown states.
-- **New:** diagnostics download, re-authentication, German translation, routines
-  and areas load in the background (never block startup), automated tests and
-  GitHub validation (hassfest, HACS).
-
-Full details: [CHANGELOG.md](CHANGELOG.md).
+What changed in which version is listed in the
+[releases](https://github.com/Matze89x/ha-roborock-mower/releases).
 
 ## Features
 
