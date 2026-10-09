@@ -1,16 +1,21 @@
 name: Release
 
-# Creates the GitHub release HACS installs from. Push a tag "vX.Y.Z" whose
-# version matches manifest.json, or run this workflow by hand for an existing
-# tag. The release text is that version's section of CHANGELOG.md.
+# Creates the GitHub release HACS installs from. Either push a tag "vX.Y.Z"
+# whose version matches manifest.json, or run this workflow by hand with the
+# tag (and, if the tag does not exist yet, the commit to put it on -- default:
+# the tip of the branch it runs on). The release text is that version's
+# section of CHANGELOG.md.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to publish, e.g. v0.1.1
+        description: Version tag to release, e.g. v0.1.1
         required: true
+      target:
+        description: Commit to tag if the tag does not exist yet (default: branch tip)
+        required: false
 
 permissions:
   contents: write
@@ -20,11 +25,20 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
+      TARGET: ${{ inputs.target }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
+
+      - name: Check out the commit to release
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            git checkout -q "$TAG"
+          else
+            git checkout -q "${TARGET:-$GITHUB_SHA}"
+          fi
+          echo "SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Check that the tag matches manifest.json
         run: |
@@ -45,9 +59,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Only the highest version is marked "latest", so publishing an
-          # older tag afterwards does not demote the current release.
-          highest=$(git tag --list 'v*' --sort=-version:refname | head -n 1)
+          # older version afterwards does not demote the current release.
+          highest=$( (git tag --list 'v*'; echo "$TAG") | sort -V | tail -n 1)
           latest=false
           [ "$TAG" = "$highest" ] && latest=true
-          gh release create "$TAG" --verify-tag --title "${TAG#v}" \
+          gh release create "$TAG" --target "$SHA" --title "${TAG#v}" \
             --notes-file notes.md --latest="$latest"

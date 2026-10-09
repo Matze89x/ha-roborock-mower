@@ -46,8 +46,9 @@ Library schreibt nicht mehr hunderte MB ins Debug-Log.
 - Efficiency mode options are translated (Daily/Täglich, Efficient/Effizient,
   Manicure/Feinschnitt). Their state values are now lowercase (`daily`, …);
   update automations that compared against `Daily`.
-- GitHub releases: pushing a `vX.Y.Z` tag creates the release from this
-  changelog (`.github/workflows/release.yml`).
+- GitHub releases (`.github/workflows/release.yml`): pushing a `vX.Y.Z` tag, or
+  running the workflow by hand with the tag, creates the release from this
+  changelog; HACS then offers the versions.
 
 ## 0.1.0 – first release of the **Roborock Mower** fork
 
