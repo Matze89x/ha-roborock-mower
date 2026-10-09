@@ -24,10 +24,12 @@ from homeassistant.components.sensor import (
 from homeassistant.const import (
     DEGREE,
     PERCENTAGE,
+    REVOLUTIONS_PER_MINUTE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
     UnitOfArea,
     UnitOfLength,
+    UnitOfSpeed,
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
@@ -401,6 +403,31 @@ def _plan_attrs(info: RobotInfo) -> dict[str, Any] | None:
     }
 
 
+def _while_working(*path: str | int) -> Callable[[RobotInfo], float | int | None]:
+    """A live value that the mower leaves out when it is 0 (docked, idle)."""
+
+    def _value(info: RobotInfo) -> float | int | None:
+        if not info.status:
+            return None
+        return abs(as_number(dig(info.status, *path)) or 0)
+
+    return _value
+
+
+def _remaining_mow_time(info: RobotInfo) -> float | int | None:
+    """Estimate for the running task: its expected time times what is left."""
+    if not info.status:
+        return None
+    progress = dig(info.status, "navigation", "nav_task_progress")
+    if not isinstance(progress, dict):
+        return 0
+    expected = as_number(progress.get("expected_time"))
+    percent = as_number(progress.get("percentage", progress.get("percent")))
+    if expected is None or percent is None:
+        return None
+    return max(0, round(expected * (1 - min(percent, 100) / 100)))
+
+
 def _map_name(info: RobotInfo) -> str | None:
     name = dig(info.status, "map_abstracts", 0, "name") or dig(
         info.status, "map_names", 0
@@ -432,6 +459,16 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         suggested_display_precision=0,
         icon="mdi:timer-sand",
         value_fn=_number("mow_progress", "expected_time"),
+    ),
+    RobotStatusSensorDescription(
+        key="remaining_mow_time",
+        translation_key="remaining_mow_time",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_unit_of_measurement=UnitOfTime.MINUTES,
+        suggested_display_precision=0,
+        icon="mdi:timer-sand-complete",
+        value_fn=_remaining_mow_time,
     ),
     RobotStatusSensorDescription(
         key="next_mow",
@@ -545,6 +582,26 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         icon="mdi:alert-circle-outline",
         value_fn=_hardware_error,
         attrs_fn=_hardware_error_attrs,
+    ),
+    RobotStatusSensorDescription(
+        key="blade_speed",
+        translation_key="blade_speed",
+        native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=_DIAGNOSTIC,
+        icon="mdi:saw-blade",
+        value_fn=_while_working("hardware", "cutter_info", "main_cutter_speed"),
+    ),
+    RobotStatusSensorDescription(
+        key="speed",
+        translation_key="speed",
+        device_class=SensorDeviceClass.SPEED,
+        native_unit_of_measurement=UnitOfSpeed.METERS_PER_SECOND,
+        suggested_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        suggested_display_precision=1,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=_DIAGNOSTIC,
+        value_fn=_while_working("hardware", "wheel", "linear_velocity"),
     ),
     RobotStatusSensorDescription(
         key="last_fault",

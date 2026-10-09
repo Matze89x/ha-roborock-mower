@@ -24,6 +24,7 @@ Each folder holds:
 | Datei · file | Inhalt · content |
 |---|---|
 | `GET_ROBOT_STATUS.json` | full status: last mow, next schedule, lawn area, Wi-Fi/4G/RTK/LoRa, state machines |
+| `GET_ROBOT_STATUS_while_mowing.json` | the same during a scheduled mow: task progress and expected time, blade speed, wheel speed, position on the map, running plan |
 | `GET_ROBOT_INFO.json` | the same structure without network details; here with a controller error (`hardware.mcu_error`) |
 | `GET_MOW_PREFERENCE_CONFIG.json` | mowing preferences (global + per zone): passes, direction, efficiency, edge |
 | `GET_USER_MODE_CONFIG.json` | settings: rain protection and delay, do-not-disturb time, anti-theft, navigation options |

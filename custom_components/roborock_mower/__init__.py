@@ -66,7 +66,7 @@ from .mower_api import (
     parse_dps_push,
     redact_dps,
 )
-from .robot_status import frame_content, redact_private, shorten_long_strings
+from .robot_status import dig, frame_content, redact_private, shorten_long_strings
 from .storage import MowerCacheStore
 from .vendor.roborock.data import HomeData, UserData
 from .vendor.roborock.devices.cache import DeviceCache
@@ -163,9 +163,11 @@ _SAVE_MAP_DATA_SCHEMA = vol.Schema(
         ),
     }
 )
-# Asked at the start of save_map_data; the map itself may arrive as separate
-# messages, which the capture keeps.
-MAP_DATA_QUERIES = ("GET_MAP_MOW_SNAPSHOT", "GET_MAP_DIFFS", "GET_MAP_ABSTRACTS")
+# save_map_data: map data asked through the map channel (cloud, encrypted
+# answer), plus the map list asked normally. All raw messages are kept too.
+MAP_BLOB_QUERIES = ("GET_FULL_MAP", "GET_MAP_MOW_SNAPSHOT", "GET_MAP_DIFFS")
+MAP_INFO_QUERIES = ("GET_MAP_ABSTRACTS",)
+MAP_TIMEOUT = 30
 
 _LIST_AREAS_SCHEMA = vol.Schema(
     {
@@ -266,27 +268,40 @@ async def _capture_map_data(
     it privately, not publicly.
     """
     api = coordinator.mower_api
+    names = dig(coordinator.robot_status, "map_names") or []
+    map_name = names[0] if names and isinstance(names[0], str) else ""
     api.start_capture()
     answers: dict[str, Any] = {}
+    maps: dict[str, bytes] = {}
     try:
-        for name in MAP_DATA_QUERIES:
+        for name in MAP_INFO_QUERIES:
             try:
                 async with asyncio.timeout(SCAN_QUERY_TIMEOUT):
                     answers[name] = redact_private(await api.query(name))
             except (TimeoutError, RoborockException) as err:
                 answers[name] = {"error": str(err)[:200] or type(err).__name__}
-        try:
-            async with asyncio.timeout(SCAN_QUERY_TIMEOUT * 2):
-                answers["GET_FULL_MAP"] = redact_private(await api.get_map_raw())
-        except TimeoutError:
-            answers["GET_FULL_MAP"] = {"error": "no answer"}
+        for name in MAP_BLOB_QUERIES:
+            try:
+                async with asyncio.timeout(MAP_TIMEOUT):
+                    data = await api.get_map_data(name, map_name)
+            except (TimeoutError, RoborockException) as err:
+                answers[name] = {"error": str(err)[:200] or "no answer"}
+                continue
+            if data:
+                maps[name] = data
+                answers[name] = {"bytes": len(data)} | frame_content(data)
+            else:
+                answers[name] = {"error": "no map data in the answer"}
         await asyncio.sleep(wait)
     finally:
         frames = api.stop_capture()
     folder = Path(hass.config.path(DOMAIN, f"map_{dt_util.now():%Y%m%d_%H%M%S}"))
-    files = await hass.async_add_executor_job(_write_map_data, folder, frames, answers)
+    files = await hass.async_add_executor_job(
+        _write_map_data, folder, frames, answers, maps
+    )
     result = {
         "folder": str(folder),
+        "map_name": map_name,
         "files": [entry["file"] for entry in files],
         "note": "Map data may show your garden; share it privately.",
         "answers": answers,
@@ -301,10 +316,17 @@ async def _capture_map_data(
 
 
 def _write_map_data(
-    folder: Path, frames: list[tuple[str, int, bytes]], answers: dict[str, Any]
+    folder: Path,
+    frames: list[tuple[str, int, bytes]],
+    answers: dict[str, Any],
+    maps: dict[str, bytes],
 ) -> list[dict[str, Any]]:
     folder.mkdir(parents=True, exist_ok=True)
     files: list[dict[str, Any]] = []
+    for query, data in maps.items():
+        name = f"{query}_map.bin"
+        (folder / name).write_bytes(data)
+        files.append({"file": name, "bytes": len(data)})
     for index, (received, protocol, payload) in enumerate(frames):
         name = f"{index:03d}_p{protocol}.bin"
         (folder / name).write_bytes(payload)
