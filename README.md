@@ -1,7 +1,7 @@
 # Roborock Mower – Home Assistant Integration
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
-[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Matze89x&repository=Roborock-Mower&category=integration)
+[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Matze89x&repository=ha-roborock-mower&category=integration)
 
 **Deutsch** · [English below](#english)
 
@@ -56,7 +56,7 @@ Alle Details: [CHANGELOG.md](CHANGELOG.md).
 ## Installation über HACS
 
 1. HACS → ⋮ → **Benutzerdefinierte Repositories** →
-   `https://github.com/Matze89x/Roborock-Mower`, Typ **Integration** → Hinzufügen.
+   `https://github.com/Matze89x/ha-roborock-mower`, Typ **Integration** → Hinzufügen.
 2. „Roborock Mower“ suchen → **Herunterladen**.
 3. Home Assistant **neu starten**.
 4. Einstellungen → Geräte & Dienste → **Integration hinzufügen** → „Roborock Mower“ →
@@ -74,7 +74,7 @@ ausgetauscht.
 2. HACS → „Roborock Mower“ (Original) → ⋮ → **Entfernen**.
 3. HACS → ⋮ → **Benutzerdefinierte Repositories** → das alte Repository
    (`christiantroldmand/...`) entfernen und
-   `https://github.com/Matze89x/Roborock-Mower` als **Integration** hinzufügen.
+   `https://github.com/Matze89x/ha-roborock-mower` als **Integration** hinzufügen.
 4. „Roborock Mower“ → **Herunterladen** → Home Assistant **neu starten**.
 5. Prüfen: *Geräte & Dienste* → sowohl **Roborock** (Staubsauger) als auch
    **Roborock Mower** sind „geladen“. Hat die alte Version python-roborock
@@ -177,7 +177,7 @@ Full details: [CHANGELOG.md](CHANGELOG.md).
 
 ## Installation via HACS
 
-1. HACS → ⋮ → **Custom repositories** → `https://github.com/Matze89x/Roborock-Mower`,
+1. HACS → ⋮ → **Custom repositories** → `https://github.com/Matze89x/ha-roborock-mower`,
    type **Integration** → Add.
 2. Search "Roborock Mower" → **Download**.
 3. **Restart** Home Assistant.
@@ -194,7 +194,7 @@ devices, entities and automations **are kept** – only the files are replaced.
 1. Do **not** delete the integration under *Devices & services*.
 2. HACS → "Roborock Mower" (original) → ⋮ → **Remove**.
 3. HACS → ⋮ → **Custom repositories** → remove the old repository and add
-   `https://github.com/Matze89x/Roborock-Mower` as **Integration**.
+   `https://github.com/Matze89x/ha-roborock-mower` as **Integration**.
 4. "Roborock Mower" → **Download** → **restart** Home Assistant.
 5. Check *Devices & services*: both **Roborock** (vacuums) and **Roborock Mower**
    are loaded. If the old version had downgraded python-roborock, Home Assistant

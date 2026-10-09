@@ -3,10 +3,10 @@
   "name": "Roborock Mower",
   "codeowners": ["@Matze89x"],
   "config_flow": true,
-  "documentation": "https://github.com/Matze89x/Roborock-Mower",
+  "documentation": "https://github.com/Matze89x/ha-roborock-mower",
   "integration_type": "hub",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://github.com/Matze89x/Roborock-Mower/issues",
+  "issue_tracker": "https://github.com/Matze89x/ha-roborock-mower/issues",
   "requirements": [
     "aiomqtt>=2.5.0",
     "construct>=2.10.57",
