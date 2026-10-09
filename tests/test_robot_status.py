@@ -551,7 +551,10 @@ def test_query_answers_stay_out_of_log_and_history(
 def _answering(calls: list[str], status: dict[str, Any] | None = None):
     """A send_command that answers the queries like the live mower."""
 
-    async def _send(method: str, params: dict) -> object:
+    async def _send(method: str, params: dict | None = None) -> object:
+        if params is None:  # a plain RPC such as get_map
+            calls.append(method)
+            return ["ok"]
         calls.append(params["type"])
         if params["type"] == "GET_ROBOT_STATUS":
             answer = status if status is not None else LIVE_STATUS
@@ -808,11 +811,15 @@ async def test_save_map_data_writes_the_captured_messages(
     calls: list[str] = []
     answer = _answering(calls)
 
-    async def _send(method: str, params: dict) -> object:
+    async def _send(method: str, params: dict | None = None) -> object:
         return await answer(method, params)
 
-    async def _map(method: str, params: dict) -> bytes:
+    async def _map(method: str, params: dict | None = None) -> bytes:
         # Asked through the map channel, the mower sends the map itself.
+        if method == "get_map":
+            return b"PB\x01\x02"
+        if params is None:
+            raise RoborockException("Command timed out after 10.0s")
         if params["type"] == "GET_FULL_MAP":
             assert params["modify_map"] == {"name": "APP_MAP1.bin"}
             return b"\x00\x01\x02"
@@ -849,9 +856,17 @@ async def test_save_map_data_writes_the_captured_messages(
     assert result["map_name"] == "APP_MAP1.bin"
     assert result["answers"]["GET_FULL_MAP"] == {"bytes": 3, "base64": "AAEC"}
     assert "timed out" in result["answers"]["GET_MAP_DIFFS"]["error"]
+    # The app's map RPCs: through the map channel and the normal one.
+    assert result["answers"]["get_map_map"] == {"bytes": 4, "base64": "UEIBAg=="}
+    assert result["answers"]["get_map_rpc"] == ["ok"]
+    assert "timed out" in result["answers"]["get_map_diff_map"]["error"]
     folder = Path(result["folder"])
     assert folder.parent == tmp_path / DOMAIN
     assert (folder / "000_p301.bin").read_bytes() == b"\x08\x01map"
     assert (folder / "GET_FULL_MAP_map.bin").read_bytes() == b"\x00\x01\x02"
-    assert set(result["files"]) >= {"000_p301.bin", "GET_FULL_MAP_map.bin"}
+    assert set(result["files"]) >= {
+        "000_p301.bin",
+        "GET_FULL_MAP_map.bin",
+        "get_map_map_map.bin",
+    }
     assert await hass.config_entries.async_unload(config_entry.entry_id)

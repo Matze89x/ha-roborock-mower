@@ -113,6 +113,8 @@ TYPE_GET_MOW_PREFERENCE_CONFIG = "GET_MOW_PREFERENCE_CONFIG"
 TYPE_GET_MAP_NAMES = "GET_MAP_NAMES"
 TYPE_GET_FULL_MAP = "GET_FULL_MAP"
 TYPE_GET_ROBOT_STATUS = "GET_ROBOT_STATUS"
+# Read-only map RPCs the app uses next to remote_pb (getMapData / getMapDiff).
+MAP_RPC_METHODS = ("get_map", "get_map_diff")
 
 # --- AppButton.Type values the app uses for the mow flow (names on the wire).
 BUTTON_MOW_GLOBAL = "MOW_GLOBAL"  # start full-lawn mow
@@ -1070,6 +1072,34 @@ class MowerApi:
             result=f"<{len(data)} bytes>" if data is not None else _short(result),
         )
         return data
+
+    async def get_map_rpc(self, method: str, *, map_channel: bool) -> Any:
+        """The app's map RPC (``get_map`` / ``get_map_diff``), as the mower answers.
+
+        Through the map channel (cloud, encrypted answer) the result is the
+        unpacked map bytes; through the normal channel whatever the mower
+        returns (an answer that python-roborock can't parse comes back as the
+        text of its error, see :meth:`_query`).
+        """
+        if method not in MAP_RPC_METHODS:
+            raise ValueError(f"Unknown map method: {method}")
+        label = f"{method} ({'map' if map_channel else 'rpc'})"
+        target = self._channel.map_rpc_channel if map_channel else self._channel.rpc_channel
+        try:
+            result = await target.send_command(method)
+        except RoborockException as err:
+            text = str(err)
+            marker = text.find(_UNEXPECTED_RESULT_PREFIX)
+            if marker == -1:
+                self._record("command", command=label, error=_short(text))
+                raise
+            result = text[marker + len(_UNEXPECTED_RESULT_PREFIX) :]
+        if isinstance(result, (bytes, bytearray)):
+            result = bytes(result)
+            self._record("command", command=label, result=f"<{len(result)} bytes>")
+        else:
+            self._record("command", command=label, result=f"<answer, {len(str(result))} characters>")
+        return result
 
     async def get_routines(self) -> list[HomeDataScene]:
         """Fetch app-defined routines/scenes for this device."""
