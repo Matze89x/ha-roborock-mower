@@ -153,7 +153,7 @@ _PREF_CONFIG_JSON = (
 def test_query_recovers_json_from_unexpected_result() -> None:
     api = _api()
 
-    async def _raise(_payload: object) -> None:
+    async def _raise(_payload: object, **_kwargs: object) -> None:
         raise RoborockException(f"Unexpected API Result: {_PREF_CONFIG_JSON}")
 
     api._send_remote_msg = _raise  # type: ignore[method-assign]
@@ -165,7 +165,7 @@ def test_query_recovers_json_from_unexpected_result() -> None:
 def test_query_reraises_real_errors() -> None:
     api = _api()
 
-    async def _raise(_payload: object) -> None:
+    async def _raise(_payload: object, **_kwargs: object) -> None:
         raise RoborockException("device offline")
 
     api._send_remote_msg = _raise  # type: ignore[method-assign]
@@ -180,7 +180,7 @@ def test_query_reraises_real_errors() -> None:
 def test_get_areas_from_preference_custom() -> None:
     api = _api()
 
-    async def _query(_payload: object) -> dict:
+    async def _query(_payload: object, **_kwargs: object) -> dict:
         import json as _json
 
         return _json.loads(_PREF_CONFIG_JSON)

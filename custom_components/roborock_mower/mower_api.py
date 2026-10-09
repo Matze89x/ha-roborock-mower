@@ -112,6 +112,7 @@ TYPE_SET_MOW_PREFERENCE = "SET_MOW_PREFERENCE"
 TYPE_GET_MOW_PREFERENCE_CONFIG = "GET_MOW_PREFERENCE_CONFIG"
 TYPE_GET_MAP_NAMES = "GET_MAP_NAMES"
 TYPE_GET_FULL_MAP = "GET_FULL_MAP"
+TYPE_GET_ROBOT_STATUS = "GET_ROBOT_STATUS"
 
 # --- AppButton.Type values the app uses for the mow flow (names on the wire).
 BUTTON_MOW_GLOBAL = "MOW_GLOBAL"  # start full-lawn mow
@@ -529,6 +530,10 @@ class MowerApi:
         self.history: deque[dict[str, Any]] = deque(maxlen=HISTORY_SIZE)
         # Received messages per protocol (diagnostics: what the mower sends).
         self.message_counts: dict[str, int] = {}
+        # Last mowing preference config read from the mower (settings).
+        self.preference_config: dict[str, Any] | None = None
+        # Data points (except GPS) that changed with the last merge.
+        self.last_changes: frozenset[int] = frozenset()
         self._return_requested_at: float | None = None
         self._task_requested_at: float | None = None
         self._left_dock_at: float | None = None
@@ -580,6 +585,8 @@ class MowerApi:
 
     def note_message(self, protocol: Any) -> bool:
         """Count a received message; True the first time a protocol is seen."""
+        if type(protocol) is int:
+            protocol = RoborockMessageProtocol._value2member_map_.get(protocol, protocol)
         name = getattr(protocol, "name", None) or str(protocol)
         first = name not in self.message_counts
         self.message_counts[name] = self.message_counts.get(name, 0) + 1
@@ -594,6 +601,7 @@ class MowerApi:
             for code, value in dps.items()
             if self._dps.get(code) != value and code != DPS_GPS_COORDINATE
         }
+        self.last_changes = frozenset(int(code) for code in changed)
         was_on_dock = MowerStatus.from_dps(self._dps).on_dock
         self._dps.update(dps)
         if changed:
@@ -630,12 +638,15 @@ class MowerApi:
 
     # -- remote_pb transport ---------------------------------------------------
 
-    async def _send_remote_msg(self, payload: dict[str, Any]) -> Any:
+    async def _send_remote_msg(
+        self, payload: dict[str, Any], *, record: bool = True
+    ) -> Any:
         """Send a RemoteMsg (a ``type`` plus its value field) via remote_pb.
 
         Mirrors the app's cloud path: a ``RemoteMsg`` as its protobufjs ``toJSON``
         object (string enum names, ``id`` as a decimal string), delivered through
-        ``rpc_channel.send_command('remote_pb', params=<obj>)``.
+        ``rpc_channel.send_command('remote_pb', params=<obj>)``. ``record=False``
+        keeps routine status polls out of the event history.
         """
         message = {"id": str(int(time.time() * 1000)), **payload}
         command = " ".join(
@@ -649,11 +660,30 @@ class MowerApi:
                 "remote_pb", params=message
             )
         except RoborockException as err:
-            self._record("command", **entry, error=_short(str(err)))
-            _LOGGER.debug("[%s] remote_pb %s failed: %s", self._duid, command, _short(str(err)))
+            text = str(err)
+            marker = text.find(_UNEXPECTED_RESULT_PREFIX)
+            if marker == -1:
+                if record:
+                    self._record("command", **entry, error=_short(text))
+                _LOGGER.debug("[%s] remote_pb %s failed: %s", self._duid, command, _short(text))
+                raise
+            # A query answer as JSON text (parsed by _query).
+            shown = f"<answer, {len(text) - marker - len(_UNEXPECTED_RESULT_PREFIX)} characters>"
+            if record:
+                self._record("command", **entry, result=shown)
+            _LOGGER.debug("[%s] remote_pb %s -> %s", self._duid, command, shown)
             raise
-        self._record("command", **entry, result=_short(result))
-        _LOGGER.debug("[%s] remote_pb %s -> %s", self._duid, command, _short(result))
+        # Query answers can hold the mower's position and network details:
+        # only their size goes to the history and the log.
+        shown = (
+            f"<answer, {len(str(result))} characters>"
+            if str(payload.get("type", "")).startswith("GET_")
+            and isinstance(result, (dict, str))
+            else _short(result)
+        )
+        if record:
+            self._record("command", **entry, result=shown)
+        _LOGGER.debug("[%s] remote_pb %s -> %s", self._duid, command, shown)
         if result == _REJECTED_RESULT or (
             isinstance(result, list) and _REJECTED_RESULT in result
         ):
@@ -665,7 +695,7 @@ class MowerApi:
             {"type": TYPE_APP_BUTTON, "app_button": app_button, **extra}
         )
 
-    async def _query(self, payload: dict[str, Any]) -> Any:
+    async def _query(self, payload: dict[str, Any], *, record: bool = True) -> Any:
         """Send a remote_pb GET_* query and return its parsed JSON result.
 
         The mower replies to queries with a JSON string in the RPC ``result``,
@@ -674,7 +704,7 @@ class MowerApi:
         from that exception; genuine errors are re-raised.
         """
         try:
-            result = await self._send_remote_msg(payload)
+            result = await self._send_remote_msg(payload, record=record)
         except RoborockException as err:
             text = str(err)
             marker = text.find(_UNEXPECTED_RESULT_PREFIX)
@@ -825,10 +855,25 @@ class MowerApi:
         fields = {k: v for k, v in extra.items() if k not in ("type", "id")}
         return await self._query({"type": query_type, **fields})
 
-    async def get_mow_preference_config(self) -> dict[str, Any] | None:
+    async def get_robot_status(self, *, record: bool = True) -> dict[str, Any] | None:
+        """Ask the mower for its full status (``GET_ROBOT_STATUS``), or None.
+
+        Raw answer: it contains the mower's GPS position and network details,
+        so callers redact it before showing or exporting it.
+        """
+        resp = await self._query({"type": TYPE_GET_ROBOT_STATUS}, record=record)
+        if not isinstance(resp, dict) or resp.get("type", "ROBOT_STATUS") != "ROBOT_STATUS":
+            return None
+        return resp
+
+    async def get_mow_preference_config(
+        self, *, record: bool = True
+    ) -> dict[str, Any] | None:
         """Read the mowing preference config (global + custom areas), or None."""
         try:
-            resp = await self._query({"type": TYPE_GET_MOW_PREFERENCE_CONFIG})
+            resp = await self._query(
+                {"type": TYPE_GET_MOW_PREFERENCE_CONFIG}, record=record
+            )
         except RoborockException as err:
             _LOGGER.debug("[%s] GET_MOW_PREFERENCE_CONFIG failed: %s", self._duid, err)
             return None
@@ -840,7 +885,10 @@ class MowerApi:
             or resp.get("mow_preference_config")
             or resp
         )
-        return cfg if isinstance(cfg, dict) else None
+        if not isinstance(cfg, dict):
+            return None
+        self.preference_config = cfg
+        return cfg
 
     async def _get_global_mow_preference(self) -> dict[str, Any] | None:
         """Best-effort read of the global MowPreference (None if unavailable)."""

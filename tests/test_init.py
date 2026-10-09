@@ -690,7 +690,12 @@ async def test_diagnostics_probe_the_mower(
     async def _send(method: str, params: dict) -> object:
         if params["type"] == "GET_ROBOT_STATUS":
             raise RoborockException(
-                'Unexpected API Result: {"blade_hours":23.3,"gps_position":{"lat":1}}'
+                'Unexpected API Result: {"type":"ROBOT_STATUS",'
+                '"navigation":{"robot_gps":{"latitude":49.3,"longitude":7.1}},'
+                '"network":{"mac":"24:9e:7d:00:00:01","ip":"192.168.1.81",'
+                '"ssid":"Home","bssid":"e0:08:55:00:00:01","rssi":-62},'
+                '"bluetooth":{"mac":"94:BA:06:00:00:01","name":"rr-a222_EE-0001"},'
+                '"rtk":{"position_type":"FIXED_SOLUTION"}}'
             )
         if params["type"] == "GET_MAP_NAMES":
             raise RoborockException("Command timed out after 10.0s")
@@ -702,8 +707,18 @@ async def test_diagnostics_probe_the_mower(
     diag = await async_get_config_entry_diagnostics(hass, config_entry)
     probes = diag["mowers"][0]["probes"]
     assert probes["GET_ROBOT_STATUS"] == {
-        "blade_hours": 23.3,
-        "gps_position": "**REDACTED**",
+        "type": "ROBOT_STATUS",
+        "navigation": {"robot_gps": "**REDACTED**"},
+        "network": {
+            "mac": "**REDACTED**",
+            "ip": "**REDACTED**",
+            "ssid": "**REDACTED**",
+            "bssid": "**REDACTED**",
+            "rssi": -62,
+        },
+        "bluetooth": "**REDACTED**",
+        # Not a position: stays readable.
+        "rtk": {"position_type": "FIXED_SOLUTION"},
     }
     assert "timed out" in probes["GET_MAP_NAMES"]["error"]
     assert diag["mowers"][0]["message_counts"]
