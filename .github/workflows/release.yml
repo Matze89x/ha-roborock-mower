@@ -11,10 +11,10 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Version tag to release, e.g. v0.1.1
+        description: "Version tag to release, e.g. v0.1.1"
         required: true
       target:
-        description: Commit to tag if the tag does not exist yet (default: branch tip)
+        description: "Commit to tag if the tag does not exist yet (default: branch tip)"
         required: false
 
 permissions:
