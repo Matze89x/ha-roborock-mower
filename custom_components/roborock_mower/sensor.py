@@ -32,9 +32,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
-from .entity import RoborockMowerEntity
+from .entity import RoborockMowerEntity, remove_entity
 from .mower_api import (
     CHARGE_STATE_LABELS,
+    DPS_BATTERY,
+    DPS_BLADE_LIFESPAN,
+    DPS_CHARGE_STATE,
+    DPS_CHARGE_TYPE,
+    DPS_ERROR_CODE,
+    DPS_MOW_PROGRESS,
+    DPS_MOW_STATE,
+    DPS_MOW_TYPE,
+    DPS_PEND_TYPE,
     CHARGE_TYPE_LABELS,
     MOW_TYPE_LABELS,
     PEND_TYPE_LABELS,
@@ -63,6 +72,7 @@ _REPORTED_UNKNOWN: set[tuple[str, int]] = set()
 @dataclass(frozen=True, kw_only=True)
 class RoborockMowerSensorDescription(SensorEntityDescription):
     value_fn: Callable[[MowerStatus], Any]
+    dps: int  # the data point it shows; created only if the model has it
 
 
 def _enum(
@@ -104,6 +114,7 @@ def _options(labels: dict[int, str]) -> list[str]:
 SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     RoborockMowerSensorDescription(
         key="battery",
+        dps=DPS_BATTERY,
         translation_key="battery",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
@@ -112,6 +123,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     ),
     RoborockMowerSensorDescription(
         key="mow_progress",
+        dps=DPS_MOW_PROGRESS,
         translation_key="mow_progress",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -120,6 +132,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     ),
     RoborockMowerSensorDescription(
         key="mow_state",
+        dps=DPS_MOW_STATE,
         translation_key="mow_state",
         device_class=SensorDeviceClass.ENUM,
         options=_options(ROBOT_DETAIL_STATE_LABELS),
@@ -130,6 +143,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     ),
     RoborockMowerSensorDescription(
         key="mow_type",
+        dps=DPS_MOW_TYPE,
         translation_key="mow_type",
         device_class=SensorDeviceClass.ENUM,
         options=_options(MOW_TYPE_LABELS),
@@ -138,6 +152,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     ),
     RoborockMowerSensorDescription(
         key="charge_state",
+        dps=DPS_CHARGE_STATE,
         translation_key="charge_state",
         device_class=SensorDeviceClass.ENUM,
         options=_options(CHARGE_STATE_LABELS),
@@ -146,6 +161,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     ),
     RoborockMowerSensorDescription(
         key="charge_type",
+        dps=DPS_CHARGE_TYPE,
         translation_key="charge_type",
         device_class=SensorDeviceClass.ENUM,
         options=_options(CHARGE_TYPE_LABELS),
@@ -156,6 +172,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     ),
     RoborockMowerSensorDescription(
         key="pend_type",
+        dps=DPS_PEND_TYPE,
         translation_key="pend_type",
         device_class=SensorDeviceClass.ENUM,
         options=_options(PEND_TYPE_LABELS),
@@ -166,6 +183,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     ),
     RoborockMowerSensorDescription(
         key="error_code",
+        dps=DPS_ERROR_CODE,
         translation_key="error_code",
         icon="mdi:alert-circle",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -176,6 +194,7 @@ SENSOR_DESCRIPTIONS: list[RoborockMowerSensorDescription] = [
     ),
     RoborockMowerSensorDescription(
         key="blade_lifespan",
+        dps=DPS_BLADE_LIFESPAN,
         translation_key="blade_lifespan",
         native_unit_of_measurement=PERCENTAGE,
         icon="mdi:saw-blade",
@@ -251,6 +270,32 @@ def _last_mow_attrs(info: RobotInfo) -> dict[str, Any] | None:
     if not isinstance(last, dict):
         return None
     return {"mode": enum_key(last.get("fsm_state"))}
+
+
+def _hardware_errors(info: RobotInfo) -> list[str] | None:
+    """Errors the mower's controller reports (``hardware.mcu_error.errors``).
+
+    The answer leaves an empty list out, so a known status without the field
+    means "no error".
+    """
+    if not info.status:
+        return None
+    errors = dig(info.status, "hardware", "mcu_error", "errors") or []
+    if not isinstance(errors, list):
+        errors = [errors]
+    return [key for error in errors if (key := enum_key(error))]
+
+
+def _hardware_error(info: RobotInfo) -> str | None:
+    errors = _hardware_errors(info)
+    if errors is None:
+        return None
+    return errors[0] if errors else "none"
+
+
+def _hardware_error_attrs(info: RobotInfo) -> dict[str, Any] | None:
+    errors = _hardware_errors(info)
+    return None if errors is None else {"errors": errors}
 
 
 def _map_name(info: RobotInfo) -> str | None:
@@ -382,6 +427,14 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         value_fn=_first_state(
             ("rtk", "position_type"), ("wireless_devices", "rtk_position")
         ),
+    ),
+    RobotStatusSensorDescription(
+        key="hardware_error",
+        translation_key="hardware_error",
+        entity_category=_DIAGNOSTIC,
+        icon="mdi:alert-circle-outline",
+        value_fn=_hardware_error,
+        attrs_fn=_hardware_error_attrs,
     ),
     # -- diagnostic, disabled by default ----------------------------------------
     RobotStatusSensorDescription(
@@ -560,11 +613,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up Roborock mower sensor entities."""
     coordinators = entry.runtime_data.coordinators
-    entities: list[SensorEntity] = [
-        RoborockMowerSensorEntity(coord, desc)
-        for coord in coordinators
-        for desc in SENSOR_DESCRIPTIONS
-    ]
+    entities: list[SensorEntity] = []
+    for coord in coordinators:
+        for desc in SENSOR_DESCRIPTIONS:
+            if coord.supports_dp(desc.dps):
+                entities.append(RoborockMowerSensorEntity(coord, desc))
+            else:
+                remove_entity(hass, "sensor", f"{coord.device.duid}_{desc.key}")
     entities.extend(
         RoborockRobotStatusSensor(coord, desc)
         for coord in coordinators

@@ -46,10 +46,10 @@ from .mower_api import (
 )
 from .robot_status import redact_private
 from .storage import MowerCacheStore
-from .vendor.roborock.data import HomeDataDevice, HomeDataProduct
+from .vendor.roborock.data import HomeDataDevice, HomeDataProduct, UserData
 from .vendor.roborock.exceptions import RoborockException, RoborockInvalidCredentials
 from .vendor.roborock.mqtt.session import MqttSession
-from .vendor.roborock.web_api import UserWebApiClient
+from .vendor.roborock.web_api import RoborockApiClient, UserWebApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +63,9 @@ class MowerRuntimeData:
     cache: MowerCacheStore
     mqtt_session: MqttSession
     web_api: UserWebApiClient
+    # For the scan_queries action (reads the app plugin with this account).
+    api_client: RoborockApiClient | None = None
+    user_data: UserData | None = None
     unsubscribes: list[Callable[[], None]] = field(default_factory=list)
 
 
@@ -166,6 +169,21 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
             )
         return status
 
+    def supports_dp(self, code: int) -> bool:
+        """Whether the product schema lists data point ``code``.
+
+        Models differ (the RockNeo Q105 has no blade-life or pause-reason data
+        point, a RockMow does), so entities for missing ones are not created.
+        Without a schema everything counts as supported.
+        """
+        codes: set[int] = set()
+        for item in self.product.schema or []:
+            try:
+                codes.add(int(item.id))
+            except (TypeError, ValueError):
+                continue
+        return not codes or code in codes
+
     # -- full robot status (GET_ROBOT_STATUS) ----------------------------------
 
     @property
@@ -196,7 +214,7 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
     async def async_poll_robot_status(self) -> None:
         """Keep the full status fresh for as long as the config entry runs.
 
-        Polls every minute while a task runs, every ten minutes otherwise, and
+        Polls every minute while a task runs, every 30 minutes otherwise, and
         a few seconds after the mower pushes a state change, so the "last mow"
         values follow right after a run ends.
         """

@@ -258,13 +258,26 @@ Live on a RockNeo Q105 (fw 02.72.44); the fields the entities use
 | `navigation.ai_obs_cmd.generic_obs_avoidance` / `.class_obs_avoidance` | `true` | obstacle avoidance / object recognition |
 | `hardware.cutter_info.has_edge_cutter`, `hardware.safety_lock_status`, `navigation.map_editing` | `true`, `false`, `false` | binary sensors |
 | `map_abstracts[0].name` / `.file_change_time` | `APP_MAP1.bin` / `2026-10-09-08-15-21` (UTC) | map, map changed |
+| `hardware.mcu_error.errors[]` | `MAIN_CUTTER_DRIVER_IC_FAULT` (seen once while waking up; absent = no error) | hardware error |
+
+`GET_ROBOT_INFO` answers with the same structure (`type: ROBOT_INFO`) but
+without `network` and `bluetooth`. The mower answers request types it does not
+know with `["fail"]` at once; [`docs/captures`](docs/captures) lists the
+accepted and rejected names. The `scan_queries` action takes the candidate names
+from the official app plugin (`/api/v1/appplugin` for the product,
+`/api/v1/plugins` for the category, downloaded with the user's account) by
+looking for `GET_*` strings in it.
 
 Private and never shown: `navigation.robot_gps` (latitude/longitude),
 `network.mac/ip/ssid/bssid`, `bluetooth` (MAC + a name derived from it) –
 `robot_status.redact_private` removes them before anything is stored, shown or
 exported. Not in this answer (still to find): blade/consumable wear, total
-mowing statistics, rain and wildlife protection settings – the
-`scan_queries` action tries likely query names for them.
+mowing statistics, the full schedule list, rain and wildlife protection
+settings.
+
+Data points the model has are listed in its product schema (home data); the
+Q105 has no 128, 130, 131, 136, 137, 140 (blade life) or 141, so the
+integration creates entities only for listed data points.
 
 `GET_MOW_PREFERENCE_CONFIG` → `preference_config.global`: `mow_times`
 (passes), `direction` (°), `direction_type` (`AUTO_DEFLECTION`),

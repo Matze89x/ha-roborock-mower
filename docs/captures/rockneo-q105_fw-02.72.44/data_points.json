@@ -1,0 +1,275 @@
+{
+  "_comment": "Product schema of the RockNeo Q105 (roborock.mower.a222) from the Roborock cloud, with the app's Chinese names translated, and the data point values of a docked, fully charged mower. 142 (GPS position) is left out.",
+  "schema": [
+    {
+      "id": 101,
+      "name": "rpc_request",
+      "code": "rpc_request",
+      "mode": "rw",
+      "type": "RAW",
+      "property": "null",
+      "name_en": "RPC request"
+    },
+    {
+      "id": 102,
+      "name": "rpc_response",
+      "code": "rpc_response",
+      "mode": "rw",
+      "type": "RAW",
+      "property": "null",
+      "name_en": "RPC response"
+    },
+    {
+      "id": 103,
+      "name": "dps_report",
+      "code": "dps_report",
+      "mode": "ro",
+      "type": "RAW",
+      "property": null,
+      "name_en": "DPS report"
+    },
+    {
+      "id": 120,
+      "name": "错误代码",
+      "code": "error_code",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 999, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "error code"
+    },
+    {
+      "id": 121,
+      "name": "电量",
+      "code": "battery",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "battery"
+    },
+    {
+      "id": 122,
+      "name": "割草任务类型",
+      "code": "mow_type",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "mowing task type"
+    },
+    {
+      "id": 123,
+      "name": "割草阶段状态",
+      "code": "mow_state",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "mowing stage state"
+    },
+    {
+      "id": 124,
+      "name": "建图任务类型",
+      "code": "mapping_type",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "mapping task type"
+    },
+    {
+      "id": 125,
+      "name": "建图阶段状态",
+      "code": "mapping_state",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "mapping stage state"
+    },
+    {
+      "id": 126,
+      "name": "升级阶段状态",
+      "code": "ota_state",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "upgrade stage state"
+    },
+    {
+      "id": 127,
+      "name": "充电阶段状态",
+      "code": "charge_state",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "charging stage state"
+    },
+    {
+      "id": 129,
+      "name": "回充充电原因",
+      "code": "charge_type",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "reason for returning to charge"
+    },
+    {
+      "id": 132,
+      "name": "割草启动方式",
+      "code": "mow_start_type",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "mowing start method"
+    },
+    {
+      "id": 133,
+      "name": "割草效率",
+      "code": "mow_eff_mode",
+      "mode": "rw",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "mowing efficiency"
+    },
+    {
+      "id": 134,
+      "name": "割草高度",
+      "code": "mow_height",
+      "mode": "rw",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 0, \"scale\": 100}",
+      "name_en": "mowing height"
+    },
+    {
+      "id": 135,
+      "name": "切割方向",
+      "code": "mow_direction_angle",
+      "mode": "rw",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "cutting direction"
+    },
+    {
+      "id": 138,
+      "name": "离线状态原因",
+      "code": "offline_status",
+      "mode": "ro",
+      "type": "RAW",
+      "property": "null",
+      "name_en": "offline status reason"
+    },
+    {
+      "id": 139,
+      "name": "割草进度",
+      "code": "mow_progress",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "mowing progress"
+    },
+    {
+      "id": 142,
+      "name": "机器最后位置",
+      "code": "gps_coordinate",
+      "mode": "ro",
+      "type": "RAW",
+      "property": "null",
+      "name_en": "last machine position"
+    },
+    {
+      "id": 143,
+      "name": "桩外无任务阶段状态",
+      "code": "off_dock_no_task_status",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "off-dock no-task stage state"
+    },
+    {
+      "id": 144,
+      "name": "售后模式状态",
+      "code": "afs_status",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "after-sales mode state"
+    },
+    {
+      "id": 145,
+      "name": "广域网连接类型",
+      "code": "network_channel",
+      "mode": "ro",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "WAN connection type"
+    },
+    {
+      "id": 201,
+      "name": "开始割草",
+      "code": "start",
+      "mode": "wo",
+      "type": "VALUE",
+      "property": "{\"max\": 100, \"min\": 0, \"step\": 1, \"scale\": 1}",
+      "name_en": "start mowing"
+    },
+    {
+      "id": 202,
+      "name": "回充",
+      "code": "dock",
+      "mode": "wo",
+      "type": "RAW",
+      "property": null,
+      "name_en": "return to charge"
+    },
+    {
+      "id": 203,
+      "name": "暂停任务",
+      "code": "pause",
+      "mode": "wo",
+      "type": "RAW",
+      "property": null,
+      "name_en": "pause task"
+    },
+    {
+      "id": 204,
+      "name": "继续任务",
+      "code": "resume",
+      "mode": "wo",
+      "type": "RAW",
+      "property": null,
+      "name_en": "resume task"
+    },
+    {
+      "id": 205,
+      "name": "结束并停在原地",
+      "code": "stop",
+      "mode": "wo",
+      "type": "RAW",
+      "property": null,
+      "name_en": "end and stop in place"
+    },
+    {
+      "id": 206,
+      "name": "授权状态",
+      "code": "auth_status",
+      "mode": "ro",
+      "type": "RAW",
+      "property": null,
+      "name_en": "authorization state"
+    }
+  ],
+  "values_docked": {
+    "121": 100,
+    "122": 0,
+    "123": 0,
+    "124": 0,
+    "125": 0,
+    "126": 0,
+    "127": 2,
+    "129": 0,
+    "132": 0,
+    "133": 1,
+    "135": 0,
+    "138": 0,
+    "139": 1,
+    "143": 0,
+    "144": 0,
+    "145": 1
+  }
+}

@@ -34,6 +34,7 @@ from .const import (
     ATTR_AREA_IDS,
     ATTR_AREA_NAMES,
     ATTR_DEVICE_ID,
+    ATTR_FROM_APP,
     ATTR_MAP_NAME,
     ATTR_PAYLOAD,
     ATTR_QUERY_TYPE,
@@ -47,10 +48,17 @@ from .const import (
     SERVICE_QUERY,
     SERVICE_SCAN_QUERIES,
 )
+from .app_plugin import async_find_query_names
 from .coordinator import MowerConfigEntry, MowerRuntimeData, RoborockMowerCoordinator
 from .home_data import SOURCE_CLOUD, HomeDataProvider
-from .mower_api import MowerApi, is_mower, parse_dps_push, redact_dps
-from .robot_status import redact_private
+from .mower_api import (
+    MowerApi,
+    MowerCommandRejected,
+    is_mower,
+    parse_dps_push,
+    redact_dps,
+)
+from .robot_status import redact_private, shorten_long_strings
 from .storage import MowerCacheStore
 from .vendor.roborock.data import HomeData, UserData
 from .vendor.roborock.devices.cache import DeviceCache
@@ -94,12 +102,13 @@ _SCAN_QUERIES_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional(ATTR_QUERY_TYPES): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_FROM_APP, default=True): cv.boolean,
     }
 )
 
-# Read-only query names tried by the scan_queries action when none are given:
-# guesses for data the app shows but GET_ROBOT_STATUS lacks (blade and other
-# consumables, mowing statistics, schedules, rain and wildlife protection).
+# Read-only query names tried by the scan_queries action when neither given
+# nor found in the app plugin: guesses for data the app shows but
+# GET_ROBOT_STATUS lacks (consumables, statistics, schedules, rain, ...).
 SCAN_QUERY_CANDIDATES = (
     "GET_CONSUMABLES",
     "GET_CONSUMABLE",
@@ -127,6 +136,7 @@ SCAN_QUERY_CANDIDATES = (
     "GET_CUTTER_INFO",
 )
 SCAN_QUERY_TIMEOUT = 6
+SCAN_QUERY_LIMIT = 300
 
 _LIST_AREAS_SCHEMA = vol.Schema(
     {
@@ -170,6 +180,43 @@ def _make_push_handler(
         coordinator.hass.loop.call_soon_threadsafe(_update)
 
     return _handle
+
+
+async def _app_query_names(
+    coordinator: RoborockMowerCoordinator,
+) -> tuple[list[str], list[str]]:
+    """Query names from the official app plugin (via the user's own account)."""
+    runtime = coordinator.config_entry.runtime_data
+    if runtime.api_client is None or runtime.user_data is None:
+        return [], ["no account data"]
+    return await async_find_query_names(
+        coordinator.hass, runtime.api_client, runtime.user_data, coordinator.product
+    )
+
+
+async def _scan(coordinator: RoborockMowerCoordinator, names: list[str]) -> dict[str, Any]:
+    """Ask the mower each query, one at a time (it is a small device)."""
+    answered: dict[str, Any] = {}
+    rejected: list[str] = []
+    failed: dict[str, str] = {}
+    for name in names:
+        try:
+            async with asyncio.timeout(SCAN_QUERY_TIMEOUT):
+                answer = await coordinator.mower_api.query(name)
+        except TimeoutError:
+            failed[name] = "no answer"
+        except MowerCommandRejected:
+            rejected.append(name)
+        except RoborockException as err:
+            failed[name] = str(err)[:200]
+        else:
+            answered[name] = shorten_long_strings(redact_private(answer))
+    return {
+        "tried": len(names),
+        "answered": answered,
+        "rejected": rejected,
+        "failed": failed,
+    }
 
 
 def _mower_devices(home_data: HomeData) -> list[tuple[Any, Any]]:
@@ -253,34 +300,26 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         return result
 
     async def _scan_queries(call: ServiceCall) -> ServiceResponse:
-        names = [
-            name.strip().upper()
-            for name in call.data.get(ATTR_QUERY_TYPES) or SCAN_QUERY_CANDIDATES
-        ]
-        if bad := [name for name in names if not name.startswith("GET_")]:
+        given = [name.strip().upper() for name in call.data.get(ATTR_QUERY_TYPES) or []]
+        if bad := [name for name in given if not name.startswith("GET_")]:
             raise ServiceValidationError(
                 f"Only read-only GET_* queries are allowed: {', '.join(bad)}"
             )
         result: dict[str, Any] = {}
         for device_id in call.data[ATTR_DEVICE_ID]:
             for coordinator in _coordinators_for_device(hass, device_id):
-                answered: dict[str, Any] = {}
-                failed: dict[str, str] = {}
-                # One at a time: the mower is a small device.
-                for name in names:
-                    try:
-                        async with asyncio.timeout(SCAN_QUERY_TIMEOUT):
-                            answer = await coordinator.mower_api.query(name)
-                    except TimeoutError:
-                        failed[name] = "no answer"
-                    except RoborockException as err:
-                        failed[name] = str(err)[:200]
-                    else:
-                        answered[name] = redact_private(answer)
-                result[coordinator.device.duid] = {
-                    "answered": answered,
-                    "failed": failed,
-                }
+                report: dict[str, Any] = {}
+                names = given
+                if given:
+                    report["source"] = "given"
+                elif call.data[ATTR_FROM_APP]:
+                    names, report["app_errors"] = await _app_query_names(coordinator)
+                    report["source"] = "app" if names else "built-in list"
+                if not names:
+                    names = list(SCAN_QUERY_CANDIDATES)
+                    report.setdefault("source", "built-in list")
+                report.update(await _scan(coordinator, names[:SCAN_QUERY_LIMIT]))
+                result[coordinator.device.duid] = report
         return result
 
     hass.services.async_register(
@@ -368,6 +407,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
         cache=cache,
         mqtt_session=mqtt_session,
         web_api=web_api,
+        api_client=client,
+        user_data=user_data,
     )
 
     closed = False

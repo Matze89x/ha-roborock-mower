@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -15,6 +17,13 @@ from .coordinator import RoborockMowerCoordinator
 from .mower_api import MowerStatus
 from .robot_status import RobotInfo
 from .vendor.roborock.exceptions import RoborockException
+
+
+def remove_entity(hass: HomeAssistant, platform: str, unique_id: str) -> None:
+    """Drop an entity an earlier version created that this mower can't fill."""
+    registry = er.async_get(hass)
+    if entity_id := registry.async_get_entity_id(platform, DOMAIN, unique_id):
+        registry.async_remove(entity_id)
 
 
 class RoborockMowerEntity(CoordinatorEntity[RoborockMowerCoordinator]):

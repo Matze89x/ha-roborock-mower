@@ -8,7 +8,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
-from .entity import RoborockMowerEntity
+from .entity import RoborockMowerEntity, remove_entity
+from .mower_api import DPS_MOW_HEIGHT
 
 
 async def async_setup_entry(
@@ -17,9 +18,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Roborock mower number entities."""
-    async_add_entities(
-        RoborockMowHeightNumber(coord) for coord in entry.runtime_data.coordinators
-    )
+    entities = []
+    for coord in entry.runtime_data.coordinators:
+        if coord.supports_dp(DPS_MOW_HEIGHT):
+            entities.append(RoborockMowHeightNumber(coord))
+        else:
+            remove_entity(hass, "number", f"{coord.device.duid}_mow_height")
+    async_add_entities(entities)
 
 
 class RoborockMowHeightNumber(RoborockMowerEntity, NumberEntity):

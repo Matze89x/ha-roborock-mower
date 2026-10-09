@@ -258,6 +258,13 @@
           "no_solution": "No position"
         }
       },
+      "hardware_error": {
+        "name": "Hardware error",
+        "state": {
+          "none": "None",
+          "main_cutter_driver_ic_fault": "Blade motor driver fault"
+        }
+      },
       "wifi_quality": {
         "name": "Wi-Fi quality",
         "state": {
@@ -320,7 +327,8 @@
         "state": {
           "sleep": "Sleeping",
           "awake": "Awake",
-          "normal": "Normal"
+          "normal": "Normal",
+          "prepare": "Preparing"
         }
       },
       "runtime_state": {
@@ -372,7 +380,8 @@
         "name": "Controller state",
         "state": {
           "mcu_low_power": "Power saving",
-          "mcu_normal": "Normal"
+          "mcu_normal": "Normal",
+          "run": "Running"
         }
       },
       "map_name": {
@@ -490,15 +499,19 @@
     },
     "scan_queries": {
       "name": "Scan mower queries",
-      "description": "Tries a list of read-only queries (GET_*) on the mower one after another and returns which ones it answers. Helps to find data the integration does not show yet, such as blade wear or mowing statistics. Never moves the mower or changes settings; takes up to a few minutes.",
+      "description": "Asks the mower one read-only query (GET_*) after another and returns which ones it answers. By default the query names are taken from the official Roborock app plugin, downloaded with your own account like the app does; without it a short built-in list is tried. Helps to find data the integration does not show yet, such as schedules, blade wear or mowing statistics. Never moves the mower or changes settings; may take a few minutes.",
       "fields": {
         "device_id": {
           "name": "Mower",
           "description": "The Roborock mower(s) to scan."
         },
+        "from_app": {
+          "name": "Names from the Roborock app",
+          "description": "Take the query names from the official app plugin (recommended). Ignored when queries are given below."
+        },
         "query_types": {
           "name": "Queries",
-          "description": "Optional list of query names to try (each must start with GET_). Without it, a built-in list of likely names is tried."
+          "description": "Optional list of query names to try (each must start with GET_)."
         }
       }
     }

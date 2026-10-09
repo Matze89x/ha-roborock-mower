@@ -1,0 +1,35 @@
+{
+  "_comment": "roborock_mower.scan_queries with the built-in list of guessed names (integration 0.2.0, 2026-10-09). The mower answers unknown request types with [\"fail\"] at once.",
+  "answered": [
+    "GET_ROBOT_STATUS",
+    "GET_ROBOT_INFO",
+    "GET_MOW_PREFERENCE_CONFIG",
+    "GET_MAP_NAMES",
+    "GET_HEIGHT_MOTOR_PARAMETER"
+  ],
+  "rejected": [
+    "GET_CONSUMABLES",
+    "GET_CONSUMABLE",
+    "GET_CONSUMABLE_INFO",
+    "GET_STATISTICS",
+    "GET_MOW_STATISTICS",
+    "GET_TOTAL_STATISTICS",
+    "GET_MOW_SUMMARY",
+    "GET_MOW_RECORDS",
+    "GET_MOW_HISTORY",
+    "GET_PLANS",
+    "GET_MOW_PLANS",
+    "GET_PLAN_LIST",
+    "GET_SCHEDULE",
+    "GET_RAIN_CONFIG",
+    "GET_RAIN_DETECTION",
+    "GET_WILDLIFE_PROTECTION",
+    "GET_DND",
+    "GET_ROBOT_CONFIG",
+    "GET_DEVICE_INFO",
+    "GET_VERSION",
+    "GET_NETWORK_INFO",
+    "GET_ANTI_THEFT",
+    "GET_CUTTER_INFO"
+  ]
+}

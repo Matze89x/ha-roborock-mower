@@ -1,0 +1,33 @@
+name: "Fehler melden / Report a bug"
+description: "Etwas funktioniert nicht wie erwartet / Something does not work as expected"
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: "Was ist passiert? / What happened?"
+      description: "Mit Uhrzeit, wenn möglich / With the time, if possible"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Was hast du erwartet? / What did you expect?"
+  - type: input
+    id: versions
+    attributes:
+      label: "Versionen / Versions"
+      placeholder: "Integration 0.2.1, Home Assistant 2026.10.0, Mäher-Firmware 02.72.44"
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: "Diagnose / Diagnostics"
+      description: "Einstellungen → Geräte & Dienste → Roborock Mower → ⋮ → Diagnose herunterladen; Datei hier hineinziehen. Settings → Devices & services → Roborock Mower → ⋮ → Download diagnostics; drag the file here."
+  - type: textarea
+    id: log
+    attributes:
+      label: "Log (optional)"
+      description: "Mit aktiviertem Debug-Logging / with debug logging enabled"
+      render: text

@@ -245,6 +245,7 @@ def test_sensor_values_from_the_live_status() -> None:
         "network_route": "wlan0",
         "mobile_network": "connected",
         "rtk_position": "fixed_solution",
+        "hardware_error": "none",
         "wifi_quality": "good",
         "wifi_state": "connected",
         "wifi_band": "2.4G",
@@ -277,6 +278,18 @@ def test_sensor_values_from_the_live_status() -> None:
         "days": ["friday"],
         "mode": "global",
     }
+
+
+def test_hardware_error_from_the_controller() -> None:
+    by_key = {desc.key: desc for desc in ROBOT_STATUS_SENSORS}
+    hardware_error = by_key["hardware_error"]
+    assert hardware_error.attrs_fn(_info()) == {"errors": []}
+    # Seen live in GET_ROBOT_INFO on a Q105 waking up.
+    status = copy.deepcopy(LIVE_STATUS)
+    status["hardware"]["mcu_error"] = {"errors": ["MAIN_CUTTER_DRIVER_IC_FAULT"]}
+    info = RobotInfo(status=status, preference={}, now=dt_util.now())
+    assert hardware_error.value_fn(info) == "main_cutter_driver_ic_fault"
+    assert hardware_error.attrs_fn(info) == {"errors": ["main_cutter_driver_ic_fault"]}
 
 
 def test_sensor_values_before_the_mower_answered() -> None:
@@ -514,9 +527,12 @@ async def test_query_and_scan_actions_redact_private_data(
         return_response=True,
     )
     result = response[MOWER_DUID]
+    assert result["source"] == "given"
+    assert result["tried"] == 3
     assert result["answered"]["GET_CONSUMABLES"] == {"blade": {"percent": 71}}
     assert result["answered"]["GET_ROBOT_STATUS"]["network"]["mac"] == REDACTED
     assert "Unsupported" in result["failed"]["GET_NOTHING"]
+    assert result["rejected"] == []
 
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
@@ -526,3 +542,24 @@ async def test_query_and_scan_actions_redact_private_data(
             blocking=True,
             return_response=True,
         )
+
+
+async def test_only_data_points_the_model_has_get_entities(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    """The Q105 schema has no blade-life (140) or pause-reason (130) point."""
+    registry = er.async_get(hass)
+    config_entry.add_to_hass(hass)
+    # Created by 0.2.0 and earlier; never filled on this model.
+    old = registry.async_get_or_create(
+        "sensor", DOMAIN, f"{MOWER_DUID}_blade_lifespan", config_entry=config_entry
+    )
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert registry.async_get(old.entity_id) is None
+    for key in ("blade_lifespan", "pend_type"):
+        assert registry.async_get_entity_id("sensor", DOMAIN, f"{MOWER_DUID}_{key}") is None
+    for key in ("battery", "charge_type", "mow_state", "error_code"):
+        assert registry.async_get_entity_id("sensor", DOMAIN, f"{MOWER_DUID}_{key}")
+    assert registry.async_get_entity_id("number", DOMAIN, f"{MOWER_DUID}_mow_height")

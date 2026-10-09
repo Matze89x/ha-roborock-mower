@@ -48,10 +48,11 @@ AREA_DISCOVERY_RETRY_DELAYS = (0, 120, 600, 1800)
 # The mower's full status (GET_ROBOT_STATUS: last mow, schedule, lawn area,
 # Wi-Fi/4G/RTK, ...) is asked from the mower itself -- over the local
 # connection when there is one, else MQTT; never the rate-limited cloud API.
-# Every minute while a task runs, otherwise every ten minutes, and a few
-# seconds after the mower reports a state change.
+# Every minute while a task runs, otherwise every 30 minutes (little changes
+# then, and the mower may sleep), and a few seconds after the mower reports a
+# state change -- that is when a run starts or ends.
 ROBOT_STATUS_ACTIVE_INTERVAL = timedelta(minutes=1)
-ROBOT_STATUS_IDLE_INTERVAL = timedelta(minutes=10)
+ROBOT_STATUS_IDLE_INTERVAL = timedelta(minutes=30)
 ROBOT_STATUS_SETTLE_DELAY = 5.0
 ROBOT_STATUS_TIMEOUT = 15.0
 # The mowing preferences (passes, direction, ...) rarely change.
@@ -67,6 +68,7 @@ SERVICE_LIST_AREAS = "list_areas"
 SERVICE_QUERY = "query"
 SERVICE_SCAN_QUERIES = "scan_queries"
 ATTR_QUERY_TYPES = "query_types"
+ATTR_FROM_APP = "from_app"
 ATTR_QUERY_TYPE = "query_type"
 ATTR_PAYLOAD = "payload"
 ATTR_DEVICE_ID = "device_id"

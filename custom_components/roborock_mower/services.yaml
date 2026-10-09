@@ -58,8 +58,13 @@ scan_queries:
         device:
           integration: roborock_mower
           multiple: true
+    from_app:
+      required: false
+      default: true
+      selector:
+        boolean:
     query_types:
       required: false
-      example: '["GET_CONSUMABLES", "GET_STATISTICS"]'
+      example: '["GET_ROBOT_INFO", "GET_MAP_NAMES"]'
       selector:
         object:
