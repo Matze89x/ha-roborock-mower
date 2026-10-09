@@ -1,53 +1,59 @@
 """Button platform for the Roborock mower.
 
-Exposes an Edge Cut button, a Stop button, and one button per Roborock
-"routine" (scene) created in the app. Routines are triggered by id through the
-cloud and are a convenient way to run app-authored tasks (e.g. a saved
-zone mow) from Home Assistant.
+Exposes an Edge Cut button, a Stop button, a Cancel Dock button and one button
+per Roborock "routine" (scene) created in the app. Routines are triggered by id
+through the cloud and are a convenient way to run app-authored tasks (e.g. a
+saved zone mow) from Home Assistant.
 """
 
 from __future__ import annotations
 
 import logging
 
-from roborock.data.containers import HomeDataScene
-from roborock.exceptions import RoborockException
-
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import RoborockMowerCoordinator
+from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
 from .entity import RoborockMowerEntity
+from .vendor.roborock.data.containers import HomeDataScene
+from .vendor.roborock.exceptions import RoborockException
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: MowerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the mower control buttons and one button per app routine."""
-    coordinators: list[RoborockMowerCoordinator] = hass.data[DOMAIN][entry.entry_id]
+    coordinators = entry.runtime_data.coordinators
     entities: list[ButtonEntity] = []
     for coordinator in coordinators:
         entities.append(RoborockEdgeCutButton(coordinator))
         entities.append(RoborockStopButton(coordinator))
         entities.append(RoborockCancelDockButton(coordinator))
-        try:
-            routines = await coordinator.mower_api.get_routines()
-        except RoborockException as err:
-            _LOGGER.warning(
-                "Could not fetch routines for %s: %s", coordinator.device.duid, err
-            )
-            routines = []
-        entities.extend(
-            RoborockRoutineButton(coordinator, routine) for routine in routines
-        )
     async_add_entities(entities)
+
+    async def _add_routine_buttons() -> None:
+        # Cloud call: done in the background so a slow or failing cloud never
+        # delays (or breaks) startup.
+        for coordinator in coordinators:
+            try:
+                routines = await coordinator.mower_api.get_routines()
+            except RoborockException as err:
+                _LOGGER.warning(
+                    "Could not fetch routines for %s: %s", coordinator.device.duid, err
+                )
+                continue
+            async_add_entities(
+                RoborockRoutineButton(coordinator, routine) for routine in routines
+            )
+
+    entry.async_create_background_task(
+        hass, _add_routine_buttons(), f"{entry.domain}_routines"
+    )
 
 
 class RoborockEdgeCutButton(RoborockMowerEntity, ButtonEntity):
@@ -61,7 +67,7 @@ class RoborockEdgeCutButton(RoborockMowerEntity, ButtonEntity):
         self._attr_unique_id = f"{self._device.duid}_edge_cut"
 
     async def async_press(self) -> None:
-        await self.coordinator.mower_api.edge_cut()
+        await self._async_send("Edge cut", self.coordinator.mower_api.edge_cut)
 
 
 class RoborockStopButton(RoborockMowerEntity, ButtonEntity):
@@ -78,7 +84,7 @@ class RoborockStopButton(RoborockMowerEntity, ButtonEntity):
         self._attr_unique_id = f"{self._device.duid}_stop"
 
     async def async_press(self) -> None:
-        await self.coordinator.mower_api.stop()
+        await self._async_send("Stop", self.coordinator.mower_api.stop)
 
 
 class RoborockCancelDockButton(RoborockMowerEntity, ButtonEntity):
@@ -92,7 +98,7 @@ class RoborockCancelDockButton(RoborockMowerEntity, ButtonEntity):
         self._attr_unique_id = f"{self._device.duid}_cancel_dock"
 
     async def async_press(self) -> None:
-        await self.coordinator.mower_api.cancel_dock()
+        await self._async_send("Cancel dock", self.coordinator.mower_api.cancel_dock)
 
 
 class RoborockRoutineButton(RoborockMowerEntity, ButtonEntity):
@@ -112,4 +118,7 @@ class RoborockRoutineButton(RoborockMowerEntity, ButtonEntity):
         return True
 
     async def async_press(self) -> None:
-        await self.coordinator.mower_api.execute_routine(self._routine_id)
+        await self._async_send(
+            "Routine",
+            lambda: self.coordinator.mower_api.execute_routine(self._routine_id),
+        )

@@ -7,16 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 import voluptuous as vol
-from roborock.data import UserData
-from roborock.devices.cache import DeviceCache, NoCache
-from roborock.devices.rpc.v1_channel import create_v1_channel
-from roborock.exceptions import RoborockException
-from roborock.mqtt.roborock_session import create_lazy_mqtt_session
-from roborock.mqtt.session import MqttSession
-from roborock.protocol import create_mqtt_params
-from roborock.web_api import RoborockApiClient, UserWebApiClient
-
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_USERNAME, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import (
     Event,
@@ -25,9 +16,16 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
-from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryError,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+)
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     ATTR_AREA_IDS,
@@ -41,12 +39,22 @@ from .const import (
     SERVICE_LIST_AREAS,
     SERVICE_MOW_AREAS,
 )
-from .coordinator import RoborockMowerCoordinator
+from .coordinator import MowerConfigEntry, MowerRuntimeData, RoborockMowerCoordinator
+from .home_data import SOURCE_CLOUD, HomeDataProvider
 from .mower_api import MowerApi, is_mower, parse_dps_push, redact_dps
+from .storage import MowerCacheStore
+from .vendor.roborock.data import HomeData, UserData
+from .vendor.roborock.devices.cache import DeviceCache
+from .vendor.roborock.devices.rpc.v1_channel import create_v1_channel
+from .vendor.roborock.exceptions import RoborockException, RoborockInvalidCredentials
+from .vendor.roborock.mqtt.roborock_session import create_lazy_mqtt_session
+from .vendor.roborock.mqtt.session import MqttSessionUnauthorized
+from .vendor.roborock.protocol import create_mqtt_params
+from .vendor.roborock.web_api import RoborockApiClient, UserWebApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
-type MowerConfigEntry = ConfigEntry
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _MOW_AREAS_SCHEMA = vol.Schema(
     {
@@ -84,6 +92,14 @@ def _make_push_handler(
     return _handle
 
 
+def _mower_devices(home_data: HomeData) -> list[tuple[Any, Any]]:
+    return [
+        (device, product)
+        for device, product in home_data.device_products.values()
+        if is_mower(product)
+    ]
+
+
 def _coordinators_for_device(
     hass: HomeAssistant, device_id: str
 ) -> list[RoborockMowerCoordinator]:
@@ -96,8 +112,9 @@ def _coordinators_for_device(
         raise HomeAssistantError(f"Device {device_id} is not a Roborock mower")
     matches = [
         coordinator
-        for coordinators in hass.data.get(DOMAIN, {}).values()
-        for coordinator in coordinators
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.state is ConfigEntryState.LOADED
+        for coordinator in entry.runtime_data.coordinators
         if coordinator.device.duid in duids
     ]
     if not matches:
@@ -105,10 +122,8 @@ def _coordinators_for_device(
     return matches
 
 
-def _register_services(hass: HomeAssistant) -> None:
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the zone-mowing services once for the integration."""
-    if hass.services.has_service(DOMAIN, SERVICE_MOW_AREAS):
-        return
 
     async def _mow_areas(call: ServiceCall) -> None:
         ids: list[int] = call.data[ATTR_AREA_IDS]
@@ -148,6 +163,7 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=_LIST_AREAS_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> bool:
@@ -162,83 +178,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
         session=async_get_clientsession(hass),
     )
     web_api = UserWebApiClient(client, user_data)
+    cache = MowerCacheStore(hass, entry.entry_id)
+    home_data_provider = HomeDataProvider(client, user_data, cache)
+    previous_home_data = await home_data_provider.async_get_cached()
 
-    # Force the v3 home-data endpoint: it returns every device category
-    # (including mowers). Some python-roborock versions' get_home_data() maps to
-    # an older endpoint that returns an empty device list for this account.
-    get_home_data_v3 = getattr(client, "get_home_data_v3", None)
     try:
-        if get_home_data_v3 is not None:
-            home_data = await get_home_data_v3(user_data)
-        else:
-            home_data = await web_api.get_home_data()
+        home_data = await home_data_provider.async_get_for_setup()
+    except RoborockInvalidCredentials as err:
+        raise ConfigEntryAuthFailed(
+            "Roborock login expired; please re-authenticate"
+        ) from err
     except RoborockException as err:
         raise ConfigEntryNotReady(f"Failed to fetch home data: {err}") from err
 
-    mower_devices = [
-        (device, product)
-        for _duid, (device, product) in home_data.device_products.items()
-        if is_mower(product)
-    ]
-
-    if not mower_devices:
-        seen = [
-            (
-                device.name,
-                getattr(product, "model", None),
-                str(getattr(product, "category", None)),
+    mower_devices = _mower_devices(home_data)
+    fresh = home_data_provider.source == SOURCE_CLOUD
+    if not mower_devices and previous_home_data is not None:
+        # The cloud answered but listed no mower. Prefer the previous snapshot if
+        # it had one (transient empty answers happen), otherwise stop below:
+        # retrying would only burn the account's home_data budget.
+        mower_devices = _mower_devices(previous_home_data)
+        fresh = False
+        if mower_devices:
+            _LOGGER.warning(
+                "Roborock cloud listed no mower this time; using the "
+                "previously stored device list"
             )
-            for _duid, (device, product) in home_data.device_products.items()
-        ]
-        _LOGGER.warning(
-            "No mower devices found on account %s (base_url=%s). "
-            "device_products=%s devices=%d received=%d products=%d -- if the "
-            "counts are 0, the account/region this login resolved to has no "
-            "devices; re-add the integration selecting the correct region.",
+    if not mower_devices:
+        _LOGGER.error(
+            "No mower found on Roborock account %s (base_url=%s). Devices on "
+            "this account: %s. If this list is empty the login resolved to the "
+            "wrong region; remove the integration and add it again with the "
+            "correct region",
             username,
             base_url,
-            seen,
-            len(getattr(home_data, "devices", None) or []),
-            len(getattr(home_data, "received_devices", None) or []),
-            len(getattr(home_data, "products", None) or []),
+            [
+                (device.name, getattr(product, "model", None))
+                for device, product in home_data.device_products.values()
+            ],
         )
-        raise ConfigEntryNotReady("No mower devices found on this account")
+        raise ConfigEntryError("No mower devices found on this Roborock account")
 
-    cache = NoCache()
     mqtt_params = create_mqtt_params(user_data.rriot)
-    mqtt_session: MqttSession = await create_lazy_mqtt_session(mqtt_params)
-
-    coordinators: list[RoborockMowerCoordinator] = []
-    unsubscribes: list[Callable[[], None]] = []
-
-    for device, product in mower_devices:
-        device_cache = DeviceCache(device.duid, cache)
-        channel = create_v1_channel(
-            user_data, mqtt_params, mqtt_session, device, device_cache
-        )
-        mower_api = MowerApi(
-            product, channel, web_api, device.duid, device.device_status
-        )
-        coordinator = RoborockMowerCoordinator(hass, device, product, mower_api)
-
-        unsubscribes.append(
-            await channel.subscribe(
-                _make_push_handler(coordinator, mower_api, device.duid)
-            )
-        )
-
-        # Seed initial state from the device_status we already fetched above
-        # instead of polling again -- get_home_data is rate-limited (5/hour,
-        # 40/day per account), so setup must cost only ONE home_data call. Live
-        # updates then arrive via MQTT push, with the hourly coordinator poll as
-        # a rate-limit-tolerant safety net.
-        coordinator.async_set_updated_data(mower_api.status)
-        coordinators.append(coordinator)
-
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinators
-
-    _register_services(hass)
+    mqtt_session = await create_lazy_mqtt_session(mqtt_params)
+    runtime = MowerRuntimeData(
+        coordinators=[],
+        home_data=home_data_provider,
+        cache=cache,
+        mqtt_session=mqtt_session,
+        web_api=web_api,
+    )
 
     closed = False
 
@@ -247,25 +236,98 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
         if closed:
             return
         closed = True
-        for unsubscribe in unsubscribes:
+        for unsubscribe in runtime.unsubscribes:
             unsubscribe()
+        runtime.unsubscribes.clear()
         await mqtt_session.close()
+        # Persist the mowers' network info learned during this run.
+        await cache.async_flush()
 
-    entry.async_on_unload(
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _shutdown)
+    try:
+        for device, product in mower_devices:
+            channel = create_v1_channel(
+                user_data,
+                mqtt_params,
+                mqtt_session,
+                device,
+                DeviceCache(device.duid, cache),
+            )
+            mower_api = MowerApi(
+                product, channel, web_api, device.duid, device.device_status
+            )
+            mower_api.online = getattr(device, "online", None)
+            coordinator = RoborockMowerCoordinator(
+                hass,
+                entry,
+                device,
+                product,
+                mower_api,
+                home_data_provider,
+                stale=not fresh,
+            )
+            runtime.unsubscribes.append(
+                await channel.subscribe(
+                    _make_push_handler(coordinator, mower_api, device.duid)
+                )
+            )
+            # Seed state from the home_data snapshot instead of polling again;
+            # live updates then arrive via MQTT push.
+            coordinator.async_set_updated_data(mower_api.status)
+            runtime.coordinators.append(coordinator)
+    except MqttSessionUnauthorized as err:
+        await _shutdown()
+        raise ConfigEntryAuthFailed(
+            "Roborock MQTT broker rejected the login; please re-authenticate"
+        ) from err
+    except RoborockException as err:
+        # Typically the network is not up yet right after a reboot, or the
+        # broker is throttling reconnects. Home Assistant retries the setup and
+        # the cached home_data spares the rate-limited cloud endpoint.
+        await _shutdown()
+        raise ConfigEntryNotReady(
+            f"Could not connect to the Roborock MQTT broker: {err}"
+        ) from err
+    except BaseException:
+        await _shutdown()
+        raise
+
+    entry.runtime_data = runtime
+
+    stop_fired = False
+
+    async def _on_stop(event: Event) -> None:
+        nonlocal stop_fired
+        stop_fired = True
+        await _shutdown(event)
+
+    remove_stop_listener = hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STOP, _on_stop
     )
+
+    def _remove_stop_listener() -> None:
+        # A once-listener that already fired is gone; removing it again makes
+        # Home Assistant log "Unable to remove unknown job listener" (seen when
+        # Home Assistant restarts while this entry is still setting up).
+        if not stop_fired:
+            remove_stop_listener()
+
+    entry.async_on_unload(_remove_stop_listener)
     entry.async_on_unload(_shutdown)
 
+    _LOGGER.debug(
+        "Set up %d mower(s); home_data source=%s",
+        len(runtime.coordinators),
+        home_data_provider.source,
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-        if not hass.data[DOMAIN]:
-            hass.services.async_remove(DOMAIN, SERVICE_MOW_AREAS)
-            hass.services.async_remove(DOMAIN, SERVICE_LIST_AREAS)
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> None:
+    """Delete the persistent cache when the config entry is removed."""
+    await MowerCacheStore(hass, entry.entry_id).async_remove()

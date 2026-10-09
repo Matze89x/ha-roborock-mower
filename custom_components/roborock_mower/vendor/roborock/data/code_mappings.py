@@ -1,0 +1,252 @@
+import logging
+from collections import namedtuple
+from enum import Enum, IntEnum, StrEnum
+from typing import Any, Self
+
+_LOGGER = logging.getLogger(__name__)
+completed_warnings = set()
+
+
+class RoborockEnum(IntEnum):
+    """Roborock Enum for codes with int values"""
+
+    _display_name_: str | None
+
+    def __new__(cls, value: int, display_name: str | None = None) -> Self:
+        member = int.__new__(cls, value)
+        member._value_ = value
+        member._display_name_ = display_name
+        return member
+
+    @property
+    def name(self) -> str:
+        return super().name.lower()
+
+    @property
+    def display_name(self) -> str:
+        return self._display_name_ or self.name
+
+    @classmethod
+    def _missing_(cls: type[Self], key) -> Self:
+        if hasattr(cls, "unknown"):
+            warning = f"Missing {cls.__name__} code: {key} - defaulting to 'unknown'"
+            if warning not in completed_warnings:
+                completed_warnings.add(warning)
+                _LOGGER.warning(warning)
+            return cls.unknown  # type: ignore[attr-defined]
+        default_value = next(item for item in cls)
+        warning = f"Missing {cls.__name__} code: {key} - defaulting to {default_value}"
+        if warning not in completed_warnings:
+            completed_warnings.add(warning)
+            _LOGGER.warning(warning)
+        return default_value
+
+    @classmethod
+    def as_dict(cls: type[Self]) -> dict[str, int]:
+        result: dict[str, int] = {}
+        for item in cls:
+            if item.name == "missing":
+                continue
+            result.setdefault(item.display_name, item.value)
+        return result
+
+    @classmethod
+    def as_enum_dict(cls: type[Self]):
+        return {i.value: i for i in cls if i.name != "missing"}
+
+    @classmethod
+    def values(cls: type[Self]) -> list[int]:
+        return list(cls.as_dict().values())
+
+    @classmethod
+    def keys(cls: type[Self]) -> list[str]:
+        return list(cls.as_dict().keys())
+
+    @classmethod
+    def items(cls: type[Self]):
+        return cls.as_dict().items()
+
+
+class RoborockModeEnum(StrEnum):
+    """A custom StrEnum that also stores an integer code for each member."""
+
+    code: int
+    """The integer code associated with the enum member."""
+    _display_name_: str | None
+
+    def __new__(cls, value: str, code: int, display_name: str | None = None) -> Self:
+        """Creates a new enum member."""
+        member = str.__new__(cls, value)
+        member._value_ = value
+        member.code = code
+        member._display_name_ = display_name
+        return member
+
+    @property
+    def display_name(self) -> str:
+        """Return the canonical user-facing name for the mode."""
+        return self._display_name_ or self.value
+
+    @classmethod
+    def from_code(cls, code: int) -> Self:
+        for member in cls:
+            if member.code == code:
+                return member
+        message = f"{code} is not a valid code for {cls.__name__}"
+        if message not in completed_warnings:
+            completed_warnings.add(message)
+            _LOGGER.warning(message)
+        raise ValueError(message)
+
+    @classmethod
+    def from_code_optional(cls, code: int) -> Self | None:
+        """Gracefully return None if the code does not exist.
+
+        This is the silent counterpart to :meth:`from_code`: callers use it when
+        an unknown code is expected and tolerable (e.g. decoding a device push
+        that may include data points this library does not model yet), so it must
+        not emit the "not a valid code" warning that ``from_code`` logs.
+        """
+        for member in cls:
+            if member.code == code:
+                return member
+        return None
+
+    @classmethod
+    def from_value(cls, value: str) -> Self:
+        """Find enum member by string value (case-insensitive)."""
+        for member in cls:
+            if member.value.lower() == value.lower():
+                return member
+        raise ValueError(f"{value} is not a valid value for {cls.__name__}")
+
+    @classmethod
+    def from_name(cls, name: str) -> Self:
+        """Find enum member by name (case-insensitive)."""
+        for member in cls:
+            if member.name.lower() == name.lower():
+                return member
+        raise ValueError(f"{name} is not a valid name for {cls.__name__}")
+
+    @classmethod
+    def from_any_optional(cls, value: str | int) -> Self | None:
+        """Resolve a string or int to an enum member.
+
+        Tries to look up by enum name, string value, or integer code
+        and returns None if no match is found.
+        """
+        # Try enum name lookup (e.g. "SEEK")
+        try:
+            return cls.from_name(str(value))
+        except ValueError:
+            pass
+        # Try DP string value lookup (e.g. "dpSeek")
+        try:
+            return cls.from_value(str(value))
+        except ValueError:
+            pass
+        # Try integer code lookup (e.g. "11"). Use the silent optional variant so
+        # a value that is neither a name, a DP string, nor a known code resolves
+        # to None without logging a spurious "not a valid code" warning.
+        try:
+            int_code = int(value)
+        except (ValueError, TypeError):
+            return None
+        return cls.from_code_optional(int_code)
+
+    @classmethod
+    def keys(cls) -> list[str]:
+        """Returns a de-duplicated list of canonical member names."""
+        return list(dict.fromkeys(member.display_name for member in cls))
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, str):
+            return self.value == other or self.name == other
+        if isinstance(other, int):
+            return self.code == other
+        return super().__eq__(other)
+
+    def __hash__(self) -> int:
+        """Hash a RoborockModeEnum.
+
+        It is critical that you do not mix RoborockModeEnums with raw strings or ints in hashed situations
+        (i.e. sets or keys in dictionaries)
+        """
+        return hash((self.code, self._value_))
+
+
+ProductInfo = namedtuple("ProductInfo", ["nickname", "short_models"])
+
+
+class RoborockProductNickname(Enum):
+    # Coral Series
+    CORAL = ProductInfo(nickname="Coral", short_models=("a20", "a21"))
+    CORALPRO = ProductInfo(nickname="CoralPro", short_models=("a143", "a144"))
+
+    # Pearl Series
+    PEARL = ProductInfo(nickname="Pearl", short_models=("a74", "a75"))
+    PEARLC = ProductInfo(nickname="PearlC", short_models=("a103", "a104"))
+    PEARLE = ProductInfo(nickname="PearlE", short_models=("a167", "a168"))
+    PEARLELITE = ProductInfo(nickname="PearlELite", short_models=("a169", "a170"))
+    PEARLPLUS = ProductInfo(nickname="PearlPlus", short_models=("a86", "a87"))
+    PEARLPLUSS = ProductInfo(nickname="PearlPlusS", short_models=("a116", "a117", "a136"))
+    PEARLS = ProductInfo(nickname="PearlS", short_models=("a100", "a101"))
+    PEARLSLITE = ProductInfo(nickname="PearlSLite", short_models=("a122", "a123"))
+
+    # Ruby Series
+    RUBYPLUS = ProductInfo(nickname="RubyPlus", short_models=("t4", "s4"))
+    RUBYSC = ProductInfo(nickname="RubySC", short_models=("p5", "a08"))
+    RUBYSE = ProductInfo(nickname="RubySE", short_models=("a19",))
+    RUBYSLITE = ProductInfo(nickname="RubySLite", short_models=("p6", "s5e", "a05"))
+
+    # Tanos Series
+    TANOS = ProductInfo(nickname="Tanos", short_models=("t6", "s6"))
+    TANOSE = ProductInfo(nickname="TanosE", short_models=("t7", "a11"))
+    TANOSS = ProductInfo(nickname="TanosS", short_models=("a14", "a15"))
+    TANOSSC = ProductInfo(nickname="TanosSC", short_models=("a39", "a40"))
+    TANOSSE = ProductInfo(nickname="TanosSE", short_models=("a33", "a34"))
+    TANOSSMAX = ProductInfo(nickname="TanosSMax", short_models=("a52",))
+    TANOSSLITE = ProductInfo(nickname="TanosSLite", short_models=("a37", "a38"))
+    TANOSSPLUS = ProductInfo(nickname="TanosSPlus", short_models=("a23", "a24"))
+    TANOSV = ProductInfo(nickname="TanosV", short_models=("t7p", "a09", "a10"))
+
+    # Topaz Series
+    TOPAZS = ProductInfo(nickname="TopazS", short_models=("a29", "a30", "a76"))
+    TOPAZSC = ProductInfo(nickname="TopazSC", short_models=("a64", "a65"))
+    TOPAZSPLUS = ProductInfo(nickname="TopazSPlus", short_models=("a46", "a47", "a66"))
+    TOPAZSPOWER = ProductInfo(nickname="TopazSPower", short_models=("a62",))
+    TOPAZSV = ProductInfo(nickname="TopazSV", short_models=("a26", "a27"))
+
+    # Ultron Series
+    ULTRON = ProductInfo(nickname="Ultron", short_models=("a50", "a51"))
+    ULTRONE = ProductInfo(nickname="UltronE", short_models=("a72", "a84"))
+    ULTRONLITE = ProductInfo(nickname="UltronLite", short_models=("a73", "a85"))
+    ULTRONSC = ProductInfo(nickname="UltronSC", short_models=("a94", "a95"))
+    ULTRONSE = ProductInfo(nickname="UltronSE", short_models=("a124", "a125", "a139", "a140"))
+    ULTRONSPLUS = ProductInfo(nickname="UltronSPlus", short_models=("a68", "a69", "a70"))
+    ULTRONSV = ProductInfo(nickname="UltronSV", short_models=("a96", "a97"))
+
+    # Verdelite Series
+    VERDELITE = ProductInfo(nickname="Verdelite", short_models=("a146", "a147"))
+
+    # Vivian Series
+    VIVIAN = ProductInfo(nickname="Vivian", short_models=("a134", "a135", "a155", "a156"))
+    VIVIANC = ProductInfo(nickname="VivianC", short_models=("a158", "a159"))
+
+
+SHORT_MODEL_TO_ENUM = {model: product for product in RoborockProductNickname for model in product.value.short_models}
+
+
+class RoborockCategory(Enum):
+    """Describes the category of the device."""
+
+    WET_DRY_VAC = "roborock.wetdryvac"
+    VACUUM = "robot.vacuum.cleaner"
+    WASHING_MACHINE = "roborock.wm"
+    MOWER = "roborock.mower"
+    UNKNOWN = "UNKNOWN"
+
+    @classmethod
+    def _missing_(cls, value):
+        _LOGGER.warning("Missing code %s from category", value)
+        return RoborockCategory.UNKNOWN

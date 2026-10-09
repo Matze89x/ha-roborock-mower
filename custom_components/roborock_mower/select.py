@@ -2,43 +2,62 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
-from roborock.exceptions import RoborockException
-
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import RoborockMowerCoordinator
+from .const import AREA_DISCOVERY_RETRY_DELAYS
+from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
 from .entity import RoborockMowerEntity
-from .mower_api import EFF_MODE_LABELS, EFF_MODE_REVERSE
+from .mower_api import EFF_MODE_LABELS, EFF_MODE_REVERSE, areas_from_preference_config
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: MowerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Roborock mower select entities."""
-    coordinators: list[RoborockMowerCoordinator] = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SelectEntity] = []
+    coordinators = entry.runtime_data.coordinators
+    async_add_entities(RoborockEfficiencyModeSelect(coord) for coord in coordinators)
+
     for coord in coordinators:
-        entities.append(RoborockEfficiencyModeSelect(coord))
-        # Add a zone picker if the device exposes saved areas.
-        try:
-            areas = await coord.mower_api.get_areas()
-        except RoborockException as err:
-            _LOGGER.debug("Could not fetch areas for %s: %s", coord.device.duid, err)
-            areas = []
-        if areas:
-            entities.append(RoborockMowAreaSelect(coord, areas))
-    async_add_entities(entities)
+        entry.async_create_background_task(
+            hass,
+            _async_add_area_select(coord, async_add_entities),
+            f"{entry.domain}_areas_{coord.device.duid}",
+        )
+
+
+async def _async_add_area_select(
+    coordinator: RoborockMowerCoordinator, async_add_entities: AddEntitiesCallback
+) -> None:
+    """Add the zone picker once the mower reports its saved areas.
+
+    The query goes to the mower itself, which is often asleep or out of Wi-Fi
+    range right after a restart, so this runs in the background with retries
+    instead of blocking (or failing) the platform setup.
+    """
+    for delay in AREA_DISCOVERY_RETRY_DELAYS:
+        if delay:
+            await asyncio.sleep(delay)
+        cfg = await coordinator.mower_api.get_mow_preference_config()
+        if cfg is None:
+            continue  # mower did not answer; try again later
+        if areas := areas_from_preference_config(cfg):
+            async_add_entities([RoborockMowAreaSelect(coordinator, areas)])
+        return
+    _LOGGER.info(
+        "[%s] Mower did not report its saved areas; the Mow Area selector will "
+        "appear after the next restart/reload while the mower is online",
+        coordinator.device.duid,
+    )
 
 
 class RoborockEfficiencyModeSelect(RoborockMowerEntity, SelectEntity):
@@ -66,7 +85,10 @@ class RoborockEfficiencyModeSelect(RoborockMowerEntity, SelectEntity):
         if code is None:
             return
         # New value reflects back over the MQTT push (DP 133).
-        await self.coordinator.mower_api.set_mow_eff_mode(code)
+        await self._async_send(
+            "Set efficiency mode",
+            lambda: self.coordinator.mower_api.set_mow_eff_mode(code),
+        )
 
 
 class RoborockMowAreaSelect(RoborockMowerEntity, SelectEntity):
@@ -98,6 +120,9 @@ class RoborockMowAreaSelect(RoborockMowerEntity, SelectEntity):
         area = self._areas.get(option)
         if area is None:
             return
-        await self.coordinator.mower_api.start_area_mow(
-            [{"id": area["id"], "name": area.get("name", "")}]
+        await self._async_send(
+            "Area mow",
+            lambda: self.coordinator.mower_api.start_area_mow(
+                [{"id": area["id"], "name": area.get("name", "")}]
+            ),
         )

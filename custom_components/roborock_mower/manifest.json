@@ -1,13 +1,18 @@
 {
   "domain": "roborock_mower",
   "name": "Roborock Mower",
-  "codeowners": ["@christiantroldmand"],
+  "codeowners": ["@Matze89x"],
   "config_flow": true,
-  "documentation": "https://github.com/christiantroldmand/Roborock-mower-support-preview",
+  "documentation": "https://github.com/Matze89x/ha-roborock-mower",
   "integration_type": "hub",
-  "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/christiantroldmand/Roborock-mower-support-preview/issues",
-  "loggers": ["roborock"],
-  "requirements": ["python-roborock>=5.12.0,<6.0.0"],
-  "version": "0.4.3"
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/Matze89x/ha-roborock-mower/issues",
+  "requirements": [
+    "aiomqtt>=2.5.0",
+    "construct>=2.10.57",
+    "paho-mqtt>=1.6.1",
+    "pycryptodome>=3.18",
+    "pyrate-limiter>=4.0.0"
+  ],
+  "version": "0.1.0"
 }

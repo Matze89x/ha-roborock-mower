@@ -1,27 +1,16 @@
-"""Unit tests for the DPS parsing logic in mower_api.
+"""Unit tests for the DPS parsing and command logic in mower_api.
 
-Loaded by file path so the tests don't import the package __init__ (which pulls
-in Home Assistant). mower_api itself only depends on python-roborock + stdlib.
+They exercise the integration's bundled python-roborock copy (vendor/), i.e.
+exactly the code that runs inside Home Assistant.
 """
 
 import asyncio
-import importlib.util
-import sys
-from pathlib import Path
 
-from roborock.exceptions import RoborockException
-
-_MODULE_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "custom_components"
-    / "roborock_mower"
-    / "mower_api.py"
+from custom_components.roborock_mower import mower_api
+from custom_components.roborock_mower.vendor.roborock.data import RoborockCategory
+from custom_components.roborock_mower.vendor.roborock.exceptions import (
+    RoborockException,
 )
-_spec = importlib.util.spec_from_file_location("mower_api", _MODULE_PATH)
-mower_api = importlib.util.module_from_spec(_spec)
-# Register before exec so @dataclass can resolve the module via sys.modules.
-sys.modules["mower_api"] = mower_api
-_spec.loader.exec_module(mower_api)
 
 
 # Real device_status captured live from the RockNeo Q105 (paused mid-mow).
@@ -284,8 +273,6 @@ class _FakeProduct:
 
 
 def test_is_mower_matches_category_or_model() -> None:
-    from roborock.data import RoborockCategory
-
     # Correct category -> mower.
     assert mower_api.is_mower(_FakeProduct(category=RoborockCategory.MOWER))
     # Right model prefix even if the category is wrong/UNKNOWN (version-robust).
@@ -326,3 +313,126 @@ def test_parse_dps_push_handles_invalid() -> None:
     assert mower_api.parse_dps_push(FakeMessage(None)) == {}
     assert mower_api.parse_dps_push(FakeMessage(b"not json")) == {}
     assert mower_api.parse_dps_push(FakeMessage(b'{"no_dps":1}')) == {}
+
+
+class _FakeRpc:
+    def __init__(self, result: object) -> None:
+        self.result = result
+        self.calls: list[tuple[str, dict]] = []
+
+    async def send_command(self, method: str, params: dict) -> object:
+        self.calls.append((method, params))
+        return self.result
+
+
+class _FakeChannel:
+    def __init__(self, result: object) -> None:
+        self.rpc_channel = _FakeRpc(result)
+
+
+def _api_with_result(result: object) -> "mower_api.MowerApi":
+    return mower_api.MowerApi(
+        product=None, channel=_FakeChannel(result), web_api=None, duid="test"
+    )
+
+
+def test_rejected_command_raises() -> None:
+    api = _api_with_result(["fail"])
+    try:
+        asyncio.run(api.start())
+    except RoborockException as err:
+        assert "rejected" in str(err)
+        assert "MOW_GLOBAL" in str(err)
+    else:
+        raise AssertionError("expected RoborockException for ['fail']")
+
+
+def test_accepted_command_returns_result() -> None:
+    api = _api_with_result(["ok"])
+    assert asyncio.run(api.pause()) == ["ok"]
+    method, params = api.channel.rpc_channel.calls[0]
+    assert method == "remote_pb"
+    assert params["app_button"] == "MOW_PAUSE"
+    assert params["id"].isdigit()
+
+
+def test_push_bookkeeping() -> None:
+    api = _api()
+    assert api.seconds_since_push is None
+    status = api.apply_push({mower_api.DPS_MOW_STATE: 55})
+    assert status.mow_state == 55
+    assert api.push_count == 1
+    assert api.seconds_since_push is not None
+
+
+def test_new_library_dps_are_decoded() -> None:
+    # 137 / 141 are named in python-roborock's RoborockMowerDataProtocol.
+    status = mower_api.MowerStatus.from_dps({137: 2, 141: 1})
+    assert status.mow_conf_mode == 2
+    assert status.fc_state == 1
+
+
+def test_apply_home_data_merges_device_status() -> None:
+    class _Device:
+        device_status = {"121": 55, "123": 76}
+        online = True
+
+    class _HomeData:
+        device_products = {"test": (_Device(), None)}
+
+    api = _api()
+    api.apply_push({mower_api.DPS_MOW_PROGRESS: 10})
+    status = api.apply_home_data(_HomeData())
+    assert status.battery == 55
+    assert status.mow_state == 76
+    assert status.mow_progress == 10  # push-only DPS kept
+    assert api.online is True
+
+
+def test_areas_from_preference_config_ignores_garbage() -> None:
+    assert mower_api.areas_from_preference_config(None) == []
+    assert mower_api.areas_from_preference_config({"custom": "x"}) == []
+    assert mower_api.areas_from_preference_config(
+        {"custom": [{"area_id": 5, "area_name": "Hinten"}, {"area_name": "no id"}]}
+    ) == [{"id": 5, "name": "Hinten"}]
+
+
+def test_dps_ids_match_bundled_python_roborock() -> None:
+    """Our DPS map must agree with the newest library's mower protocol."""
+    from custom_components.roborock_mower.vendor.roborock.roborock_message import (
+        RoborockMowerDataProtocol as P,
+    )
+
+    ours = {
+        "ERROR_CODE": mower_api.DPS_ERROR_CODE,
+        "BATTERY": mower_api.DPS_BATTERY,
+        "MOW_TYPE": mower_api.DPS_MOW_TYPE,
+        "MOW_STATE": mower_api.DPS_MOW_STATE,
+        "CHARGE_STATE": mower_api.DPS_CHARGE_STATE,
+        "DOCK_STATE": mower_api.DPS_DOCK_STATE,
+        "CHARGE_TYPE": mower_api.DPS_CHARGE_TYPE,
+        "PEND_TYPE": mower_api.DPS_PEND_TYPE,
+        "MOW_EFF_MODE": mower_api.DPS_MOW_EFF_MODE,
+        "MOW_HEIGHT": mower_api.DPS_MOW_HEIGHT,
+        "MOW_PATTERN": mower_api.DPS_MOW_PATTEN,
+        "MOW_CONF_MODE": mower_api.DPS_MOW_CONF_MODE,
+        "MOW_PROGRESS": mower_api.DPS_MOW_PROGRESS,
+        "BLADE_LIFESPAN": mower_api.DPS_BLADE_LIFESPAN,
+        "FC_STATE": mower_api.DPS_FC_STATE,
+        "GPS_COORDINATE": mower_api.DPS_GPS_COORDINATE,
+        "OFF_DOCK_NO_TASK_STATUS": mower_api.DPS_OFF_DOCK_NO_TASK_STATUS,
+        "NETWORK_CHANNEL": mower_api.DPS_NETWORK_CHANNEL,
+    }
+    for name, dps in ours.items():
+        assert getattr(P, name).value == dps, name
+
+
+def test_state_codes_cover_bundled_python_roborock() -> None:
+    """Every mower state the newest library knows has a label here."""
+    from custom_components.roborock_mower.vendor.roborock.data.mower import (
+        RoborockMowerStateCode,
+    )
+
+    for code in RoborockMowerStateCode:
+        if code.value >= 0:
+            assert code.value in mower_api.ROBOT_DETAIL_STATE_LABELS, code

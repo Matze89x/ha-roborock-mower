@@ -1,0 +1,445 @@
+from enum import StrEnum
+from typing import Self
+
+from ..code_mappings import RoborockEnum
+
+
+class RoborockFinishReason(RoborockEnum):
+    manual_interrupt = 21  # Cleaning interrupted by user
+    cleanup_interrupted = 24  # Cleanup interrupted
+    manual_interrupt_2 = 21
+    manual_interrupt_12 = (29, "manual_interrupt")
+    breakpoint = 32  # Could not continue cleaning
+    breakpoint_2 = (33, "breakpoint")
+    cleanup_interrupted_2 = (34, "cleanup_interrupted")
+    manual_interrupt_3 = (35, "manual_interrupt")
+    manual_interrupt_4 = (36, "manual_interrupt")
+    manual_interrupt_5 = (37, "manual_interrupt")
+    manual_interrupt_6 = (43, "manual_interrupt")
+    locate_fail = 45  # Positioning Failed
+    cleanup_interrupted_3 = (64, "cleanup_interrupted")
+    locate_fail_2 = (65, "locate_fail")
+    manual_interrupt_7 = (48, "manual_interrupt")
+    manual_interrupt_8 = (49, "manual_interrupt")
+    manual_interrupt_9 = (50, "manual_interrupt")
+    cleanup_interrupted_4 = (51, "cleanup_interrupted")
+    finished_cleaning = 52  # Finished cleaning
+    finished_cleaning_2 = (54, "finished_cleaning")
+    finished_cleaning_3 = (55, "finished_cleaning")
+    finished_cleaning_4 = (56, "finished_cleaning")
+    finished_clenaing_5 = (57, "finished_cleaning")
+    manual_interrupt_10 = (60, "manual_interrupt")
+    area_unreachable = 61  # Area unreachable
+    area_unreachable_2 = (62, "area_unreachable")
+    washing_error = 67  # Washing error
+    back_to_wash_failure = 68  # Failed to return to the dock
+    cleanup_interrupted_5 = (101, "cleanup_interrupted")
+    breakpoint_4 = (102, "breakpoint")
+    manual_interrupt_11 = (103, "manual_interrupt")
+    cleanup_interrupted_6 = (104, "cleanup_interrupted")
+    cleanup_interrupted_7 = (105, "cleanup_interrupted")
+    cleanup_interrupted_8 = (106, "cleanup_interrupted")
+    cleanup_interrupted_9 = (107, "cleanup_interrupted")
+    cleanup_interrupted_10 = (109, "cleanup_interrupted")
+    cleanup_interrupted_11 = (110, "cleanup_interrupted")
+    patrol_success = 114  # Cruise completed
+    patrol_fail = 115  # Cruise failed
+    pet_patrol_success = 116  # Pet found
+    pet_patrol_fail = 117  # Pet found failed
+
+
+class RoborockInCleaning(RoborockEnum):
+    complete = 0
+    global_clean_not_complete = 1
+    zone_clean_not_complete = 2
+    segment_clean_not_complete = 3
+
+
+class RoborockCleanType(RoborockEnum):
+    all_zone = 1
+    draw_zone = 2
+    select_zone = 3
+    quick_build = 4
+    video_patrol = 5
+    pet_patrol = 6
+
+
+class RoborockChargeStatus(RoborockEnum):
+    """Describes the charging status of the device."""
+
+    unknown = -1
+    charge_waiting = 0
+    charging = 1
+
+
+class RoborockDockState(StrEnum):
+    """Synthesized high-level dock and power state of the device.
+
+    This enum represents a unified "UI-level" state that combines multiple raw
+    device data points (`state`, `charge_status`, `battery`) into a single,
+    human-readable status that accurately reflects what the vacuum is doing
+    relative to the dock.
+
+    It is highly recommended for consumers of this API
+    to use this synthesized state to determine if the vacuum is charging or
+    docked, rather than attempting to parse the raw integer data points, as
+    this safely handles backward compatibility for older models that lack
+    explicit off-peak schedule reporting.
+    """
+
+    unknown = "unknown"
+    """The dock state could not be determined or is unmapped."""
+
+    idle = "idle"
+    """The vacuum is away from the dock (e.g., cleaning, paused, or errored).
+    In the official app, this state presents the 'Return to Dock' or 'Recharge' action."""
+
+    returning = "returning"
+    """The vacuum is actively navigating its way back to the dock.
+    In the official app, this state presents the 'Stop' or 'Pause' action."""
+
+    charging = "charging"
+    """The vacuum is on the dock and actively receiving electricity.
+    In the official app, this state is displayed as 'Charging'."""
+
+    off_peak_waiting = "off_peak_waiting"
+    """The vacuum is on the dock but charging is paused. It is waiting for the
+    user's scheduled 'Valley Electricity' off-peak hours to begin before
+    drawing power.
+    In the official app, this state is displayed as 'Charging paused during peak hours'."""
+
+    full = "full"
+    """The vacuum is on the dock and the battery is at 100% capacity.
+    In the official app, this state is displayed as 'Fully charged'."""
+
+    dusting = "dusting"
+    """The vacuum is on the dock and is currently being evacuated by the
+    auto-empty base.
+    In the official app, this state is displayed as 'Emptying dustbin'."""
+
+
+class RoborockStartType(RoborockEnum):
+    button = 1
+    app = 2
+    schedule = 3
+    mi_home = 4
+    quick_start = 5
+    voice_control = 13
+    routines = 101
+    alexa = 801
+    google = 802
+    ifttt = 803
+    yandex = 804
+    homekit = 805
+    xiaoai = 806
+    tmall_genie = 807
+    duer = 808
+    dingdong = 809
+    siri = 810
+    clova = 811
+    wechat = 901
+    alipay = 902
+    aqara = 903
+    hisense = 904
+    huawei = 905
+    widget_launch = 820
+    smart_watch = 821
+
+
+class RoborockDssCodes(RoborockEnum):
+    @classmethod
+    def _missing_(cls: type[Self], key) -> Self:
+        # If the calculated value is not provided, then it should be viewed as okay.
+        # As the math will sometimes result in you getting numbers that don't matter.
+        return cls.okay  # type: ignore[attr-defined]
+
+
+class ClearWaterBoxStatus(RoborockDssCodes):
+    """Status of the clear water box."""
+
+    okay = 0
+    out_of_water = 1
+    out_of_water_2 = (38, "out_of_water")
+    refill_error = 48
+
+
+class DirtyWaterBoxStatus(RoborockDssCodes):
+    """Status of the dirty water box."""
+
+    okay = 0
+    full_not_installed = 1
+    full_not_installed_2 = (39, "full_not_installed")
+    drain_error = 49
+
+
+class DustBagStatus(RoborockDssCodes):
+    """Status of the dust bag."""
+
+    okay = 0
+    not_installed = 1
+    full = 34
+
+
+class CleanFluidStatus(RoborockDssCodes):
+    """Status of the cleaning fluid container."""
+
+    empty_not_installed = 1
+    okay = 2
+
+
+class RoborockErrorCode(RoborockEnum):
+    none = 0
+    lidar_blocked = 1
+    bumper_stuck = 2
+    wheels_suspended = 3
+    cliff_sensor_error = 4
+    main_brush_jammed = 5
+    side_brush_jammed = 6
+    wheels_jammed = 7
+    robot_trapped = 8
+    no_dustbin = 9
+    strainer_error = 10  # Filter is wet or blocked
+    compass_error = 11  # Strong magnetic field detected
+    low_battery = 12
+    charging_error = 13
+    battery_error = 14
+    wall_sensor_dirty = 15
+    robot_tilted = 16
+    side_brush_error = 17
+    fan_error = 18
+    dock = 19  # Dock not connected to power
+    optical_flow_sensor_dirt = 20
+    vertical_bumper_pressed = 21
+    dock_locator_error = 22
+    return_to_dock_fail = 23
+    nogo_zone_detected = 24
+    visual_sensor = 25  # Camera error
+    light_touch = 26  # Wall sensor error
+    vibrarise_jammed = 27
+    robot_on_carpet = 28
+    filter_blocked = 29
+    invisible_wall_detected = 30
+    cannot_cross_carpet = 31
+    internal_error = 32
+    collect_dust_error_3 = 34  # Clean auto-empty dock
+    collect_dust_error_4 = 35  # Auto empty dock voltage error
+    mopping_roller_1 = 36  # Wash roller may be jammed
+    mopping_roller_error_2 = 37  # wash roller not lowered properly
+    clear_water_box_hoare = 38  # Check the clean water tank
+    dirty_water_box_hoare = 39  # Check the dirty water tank
+    sink_strainer_hoare = 40  # Reinstall the water filter
+    clear_water_box_exception = 41  # Clean water tank empty
+    clear_brush_exception = 42  # Check that the water filter has been correctly installed
+    clear_brush_exception_2 = 43  # Positioning button error
+    filter_screen_exception = 44  # Clean the dock water filter
+    mopping_roller_2 = (45, "mopping_roller_1")  # Wash roller may be jammed
+    up_water_exception = 48
+    drain_water_exception = 49
+    temperature_protection = 51  # Unit temperature protection
+    clean_carousel_exception = 52
+    clean_carousel_water_full = 53
+    water_carriage_drop = 54
+    check_clean_carouse = 55
+    audio_error = 56
+
+
+class RoborockFanPowerCode(RoborockEnum):
+    """Describes the fan power of the vacuum cleaner."""
+
+    # Fan speeds should have the first letter capitalized - as there is no way to change the name in translations as
+    # far as I am aware
+
+
+class RoborockFanSpeedV1(RoborockFanPowerCode):
+    silent = 38
+    standard = 60
+    medium = 77
+    turbo = 90
+
+
+class RoborockFanSpeedV2(RoborockFanPowerCode):
+    silent = 101
+    balanced = 102
+    turbo = 103
+    max = 104
+    gentle = 105
+    auto = 106
+
+
+class RoborockFanSpeedV3(RoborockFanPowerCode):
+    silent = 38
+    standard = 60
+    medium = 75
+    turbo = 100
+
+
+class RoborockFanSpeedE2(RoborockFanPowerCode):
+    gentle = 41
+    silent = 50
+    standard = 68
+    medium = 79
+    turbo = 100
+
+
+class RoborockMopIntensityCode(RoborockEnum):
+    """Describes the mop intensity of the vacuum cleaner."""
+
+
+class RoborockMopIntensityV2(RoborockMopIntensityCode):
+    """Describes the mop intensity of the vacuum cleaner."""
+
+    off = 200
+    low = 201
+    medium = 202
+    high = 203
+    custom = 207
+
+
+class RoborockDockErrorCode(RoborockEnum):
+    """Describes the error code of the dock."""
+
+    ok = 0
+    """No error condition."""
+
+    no_dustbin_or_filter = 32
+    """No dock dustbin or filter installed.
+
+    This error message applies to auto-empty docks.
+    """
+
+    auto_empty_dock_fan_error = 33
+    """Auto-Empty Dock fan error: Dock dustbin or filter out of place."""
+
+    duct_blockage = 34
+    """Auto-Empty Dock jammed: Dock dustbin, filter, or air duct jammed, check and clean it."""
+
+    auto_empty_dock_voltage_error = 35
+    """Auto-Empty Dock voltage error: Unable to empty the dustbin."""
+
+    water_empty = 38
+    """Clean water tank empty: Check tank placement or refill as required."""
+
+    waste_water_tank_full = 39
+    """Check the dirty water tank: Check tank placement or empty as required."""
+
+    maintenance_brush_jammed = 42
+    """Self-cleaning roller error: Maintenance brush jammed. Remove and clean."""
+
+    dirty_tank_latch_open = 44
+    """Water filter blocked: Clean and reinstall.
+
+    Make sure that the dirty water tank cover is closed and the latch is secured.
+    """
+
+    no_dustbin = 46
+    """Dustbin not installed (Standard error for missing dustbin).
+
+    This error message applies to larger wash docks.
+    """
+
+    cleaning_tank_full_or_blocked = 53
+    """Cleaning tank full or blocked (Water filter or sink strainer blocked/not installed)."""
+
+
+class RoborockDockTypeCode(RoborockEnum):
+    unknown = -9999
+    o0_dock = 0
+    o1_dock = 1
+    o2_dock = 2
+    o3_dock = 3
+    oc_dock = 5
+    o3_plus_dock = 6
+    o4_dock = 7
+    pearl_dock = 8
+    pearl_plus_dock = 9
+    o5_dock = 10
+    shell_2s_dock = 11
+    couple_dock = 13
+    shell_3_dock = 14
+    shell_2c_dock = 15
+    shell_3s_dock = 16
+    k1_dock = 17
+    o6_dock = 18
+    k1c_dock = 19
+    k1s_dock = 20
+    shell_e_dock = 21
+    shell_2e_dock = 22
+    shell_3c_dock = 23
+    hera_dock = 24
+    k1s_pro_dock = 26
+    type_27_dock = 27
+    k1c_lite_dock = 28
+    k1r_dock = 29
+    shell_2e_lite_dock = 30
+    shell_4rc_dock = 31
+    shell_4r_dock = 32
+    shell_4p_dock = 33
+    shell_4s_dock = 34
+    o7_dock = 35
+    k1d_dock = 37
+    shell_3p_dock = 38
+    shell_4d_dock = 39
+    shell_2e_heat_dock = 40
+    f1_dock = 41
+    f1r_dock = 42
+    f2r_dock = 43
+    f1s_dock = 44
+    o7h_dock = 45
+    f1c_dock = 46
+
+
+class RoborockDockDustCollectionModeCode(RoborockEnum):
+    """Describes the dust collection mode of the vacuum cleaner."""
+
+    # TODO: Get the correct values for various different docks
+    unknown = -9999
+    smart = 0
+    light = 1
+    balanced = 2
+    max = 4
+
+
+class RoborockStateCode(RoborockEnum):
+    unknown = 0
+    starting = 1
+    charger_disconnected = 2
+    idle = 3
+    remote_control_active = 4
+    cleaning = 5
+    returning_home = 6
+    manual_mode = 7
+    charging = 8
+    charging_problem = 9
+    paused = 10
+    spot_cleaning = 11
+    error = 12
+    shutting_down = 13
+    updating = 14
+    docking = 15
+    going_to_target = 16
+    zoned_cleaning = 17
+    segment_cleaning = 18
+    emptying_the_bin = 22  # on s7+
+    washing_the_mop = 23  # on a46
+    washing_the_mop_2 = (25, "washing_the_mop")
+    going_to_wash_the_mop = 26  # on a46
+    in_call = 28
+    mapping = 29
+    egg_attack = 30
+    patrol = 32
+    attaching_the_mop = 33  # on g20s ultra
+    detaching_the_mop = 34  # on g20s ultra
+    charging_complete = 100
+    device_offline = 101
+    locked = 103
+    air_drying_stopping = 202
+    robot_status_mopping = 6301
+    clean_mop_cleaning = 6302
+    clean_mop_mopping = 6303
+    segment_mopping = 6304
+    segment_clean_mop_cleaning = 6305
+    segment_clean_mop_mopping = 6306
+    zoned_mopping = 6307
+    zoned_clean_mop_cleaning = 6308
+    zoned_clean_mop_mopping = 6309
+    back_to_dock_washing_duster = 6310

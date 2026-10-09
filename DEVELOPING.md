@@ -220,40 +220,85 @@ Roborock-app **routines** path also remains available (see `button.py`).
 ## 6. Integration architecture
 
 ```
-home_data (REST) ──► find devices where product.category == MOWER
-                         │
-                         ▼
-        create_mqtt_channel(user_data, mqtt_params, mqtt_session, device)
-                         │
-        ┌────────────────┴───────────────────────┐
-        ▼ subscribe (output topic)                ▼ publish (input topic)
-   parse_dps_push(msg) ─► MowerApi.apply_push    MowerApi._write_dps (commands)
-        │                                          ▲
-        ▼                                          │
-   coordinator.async_set_updated_data        lawn_mower / number / select
+home_data (REST, rate-limited) ──► HomeDataProvider ──► persistent cache (.storage)
+                                        │  (fresh, or last snapshot on failure)
+                                        ▼
+                     mowers = products matching is_mower()
+                                        │
+        create_v1_channel(user_data, mqtt_params, mqtt_session, device, DeviceCache)
+                                        │
+        ┌───────────────────────────────┴──────────────────────────┐
+        ▼ subscribe (DPS push)                                       ▼ rpc_channel.send_command
+   parse_dps_push(msg) ─► MowerApi.apply_push               MowerApi._send_remote_msg
+        │                                                     ("remote_pb", RemoteMsg)
+        ▼                                                            ▲
+   coordinator.async_set_updated_data                lawn_mower / button / number / select
         ▲
-        │ every 60s (safety net)
-   coordinator._async_update_data ─► MowerApi.poll_status ─► home_data.device_status
+        │ every 2 h (safety net; 5 min once if setup used a cached snapshot)
+   coordinator._async_update_data ─► HomeDataProvider.async_refresh ─► apply_home_data
 ```
 
-Status is **push-first** (live DPS over MQTT) with a **60s cloud poll** as a safety
-net. Both feed a single `DataUpdateCoordinator[MowerStatus]`.
+Status is **push-first** (live DPS over MQTT). The cloud `home_data` snapshot is
+only a safety net, polled every 2 hours; a failed poll keeps the last state
+instead of marking entities unavailable.
+
+### Bundled python-roborock (`vendor/`)
+
+The integration ships its **own private copy** of the parts of
+[python-roborock](https://github.com/Python-roborock/python-roborock) it needs
+(currently **7.12.1**, Apache-2.0) under `custom_components/roborock_mower/vendor/`.
+All `roborock` imports inside the copy are rewritten to relative imports, so it
+never loads, replaces or patches the top-level `roborock` package that Home
+Assistant installs for the **official Roborock integration**. Consequences:
+
+- `manifest.json` does **not** require `python-roborock`; Home Assistant never
+  installs/downgrades it because of this integration. (Before 0.1.0 a
+  `python-roborock>=5.12.0,<6.0.0` pin made HA swap versions on every restart,
+  which broke the official integration with `ImportError`s.)
+- The remaining requirements (`aiomqtt`, `construct`, `paho-mqtt`,
+  `pycryptodome`, `pyrate-limiter`) have **lower bounds only**, so whatever Home
+  Assistant already ships satisfies them.
+- The bundled copy has its own client-side rate limiter. The account-level
+  `home_data` budget on Roborock's side is still shared with the official
+  integration and the app.
+
+Update the copy with `python script/vendor_roborock.py <version>` (the script
+computes the import closure, copies only those modules, rewrites the imports and
+records the version in `vendor/__init__.py`), then run the tests.
+
+### Startup / restart behaviour
+
+- `HomeDataProvider` fetches `home_data` once, retries once after 2 s on a
+  per-second rate limit, persists the snapshot (plus the mower's network info) in
+  `.storage/roborock_mower.<entry_id>`, and reuses a snapshot younger than 30 min
+  (setup retries, several mowers).
+- If the cloud fails, setup continues from the cached snapshot; the coordinator
+  then fetches a fresh one 5 min later.
+- MQTT problems during setup (network not up yet after a reboot, broker
+  throttling) raise `ConfigEntryNotReady` and close the MQTT session — no leaked
+  reconnect loops. An MQTT/cloud auth failure starts the **re-authentication**
+  flow.
+- A successful answer that lists no mower raises `ConfigEntryError` (no retry
+  loop burning the shared budget).
+- Routines (cloud) and saved areas (asked from the mower, which is often asleep
+  right after a restart) are discovered in **background tasks**, so platform
+  setup never blocks; areas are retried after 2, 10 and 30 minutes.
 
 ### File-by-file (`custom_components/roborock_mower/`)
 
 | File | Responsibility |
 | --- | --- |
-| `__init__.py` | Setup/teardown: fetch `home_data`, filter mowers, create one MQTT channel + `MowerApi` + coordinator per device, wire the DPS-push handler, manage the MQTT session lifecycle. |
-| `mower_api.py` | The protocol layer. `MowerStatus` dataclass + DPS id constants, `from_dps`/`coerce_dps`/`parse_dps_push`, and `MowerApi` (poll via `device_status`, merge live pushes, write command DPS, routines). |
-| `coordinator.py` | `DataUpdateCoordinator` that polls `MowerApi.poll_status()` every 60s. |
-| `entity.py` | Base entity: device info, availability, `status` accessor. |
-| `lawn_mower.py` | Lawn mower entity. Activity mapping; `start_mowing` resumes when paused (and warns that fresh start must come from the app); `pause`/`dock`. |
-| `sensor.py` | Battery, Mow Progress, Mow Mode (`mow_type`), Mow State, Charge State, Error Code. |
-| `number.py` | Mow Height (DPS 134) — experimental. |
-| `select.py` | Efficiency Mode (DPS 133) — experimental, labels unverified. |
-| `button.py` | One button per Roborock routine/scene (`get_routines`/`execute_routine`). |
-| `config_flow.py` | Email + region → emailed code → `code_login_v4`. Stores `UserData`. |
-| `const.py` | `DOMAIN`, `PLATFORMS`, `UPDATE_INTERVAL`, region options. |
+| `__init__.py` | Setup/teardown: home data via `HomeDataProvider`, filter mowers, one V1 channel + `MowerApi` + coordinator per mower, DPS-push handler, MQTT session lifecycle, services. |
+| `home_data.py` | Rate-limit-aware `home_data` access with persistent fallback. |
+| `storage.py` | `MowerCacheStore`: python-roborock `Cache` backed by a Home Assistant `Store`. |
+| `mower_api.py` | The protocol layer: DPS ids/labels, `MowerStatus`, `parse_dps_push`, `MowerApi` (`remote_pb` commands, preference/area queries, routines). |
+| `coordinator.py` | `RoborockMowerCoordinator` (push-first, 2 h safety-net poll) and the entry's `MowerRuntimeData`. |
+| `entity.py` | Base entity: device info, availability, command error handling. |
+| `lawn_mower.py` | Lawn mower entity: activity mapping, start/resume, pause, dock. |
+| `sensor.py` / `number.py` / `select.py` / `button.py` | Status sensors, cutting height, efficiency mode + area picker, edge cut / stop / cancel dock / routines. |
+| `diagnostics.py` | Redacted diagnostics download (versions, connection, raw DPS, product schema). |
+| `config_flow.py` | Email + region → emailed code → `code_login_v4`; re-authentication. |
+| `vendor/` | Bundled python-roborock (generated by `script/vendor_roborock.py`). |
 
 ---
 
@@ -290,31 +335,29 @@ gitignored), connects, and runs one command per invocation. Output is also appen
 
 ## 8. Development setup & validation
 
-Windows note: the `python` on PATH may be the Microsoft Store stub. Use the `py`
-launcher or the project venv.
+The tests run the integration inside a real Home Assistant (via
+`pytest-homeassistant-custom-component`), next to the official Roborock
+integration. Home Assistant 2026.10 needs **Python 3.14**.
 
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install "python-roborock>=5.12.0,<6.0.0" ruff pytest
+```bash
+python3.14 -m venv .venv
+.venv/bin/pip install -r requirements_test.txt
+.venv/bin/pytest
 ```
 
-Validate before committing:
+- `tests/test_mower_api.py` — DPS parsing and `remote_pb` command building
+  against real captured payloads; cross-checks the DPS ids and state codes with
+  the bundled python-roborock's mower definitions.
+- `tests/test_init.py` — setup/unload, restart with cached snapshot, rate-limit
+  collision, MQTT failure + retry, re-auth, live push, failed poll, commands,
+  background discovery, diagnostics redaction, Home Assistant stop.
+- `tests/test_coexistence.py` — loads both this and the official Roborock
+  integration in one Home Assistant; asserts the bundled copy never touches the
+  top-level `roborock` package and that `python-roborock` is not required.
+- `tests/test_config_flow.py` — user flow and re-authentication.
 
-```powershell
-.\.venv\Scripts\ruff.exe check custom_components\roborock_mower tools tests
-.\.venv\Scripts\python.exe -m pytest tests -q
-```
-
-- **Lint:** `ruff` (the integration is kept lint-clean).
-- **Tests:** `tests/test_mower_api.py` covers the DPS parsing (`coerce_dps`,
-  `MowerStatus.from_dps`, `parse_dps_push`) against a **real captured payload**. It
-  loads `mower_api.py` by file path so it doesn't import Home Assistant.
-- The integration cannot be import-tested without a Home Assistant install; the
-  real test is loading it in HA against a live account.
-
-Pin `python-roborock` to a narrow range. The `roborock.devices.*` namespace is new and
-changes across versions — re-verify the imports in `__init__.py`/`mower_api.py` on
-every bump.
+Also run Home Assistant's validator (`hassfest`) — the GitHub workflow in
+`.github/workflows/validate.yml` runs hassfest, the HACS validation and the tests.
 
 ---
 
@@ -345,21 +388,14 @@ every bump.
 - Which id `MOW_SELECT` wants (`area_id` from the preference config vs a boundary
   id) — the `--drive` area-mow step answers this.
 
-**`get_home_data` is rate-limited — 5/hour, 40/day PER ACCOUNT** (shared if the
-official Roborock integration also runs). This bit hard in practice: on a
-`python-roborock` version that classified the mower under a different category,
-setup raised `ConfigEntryNotReady`, HA retried it, and **each retry spent one
-`home_data` call — 5 retries hit the 5/hour cap in ~2.5 min** (the classic
-"No mower found ×5 → Reached maximum requests" sequence). Mitigations, all
-shipped:
-- Match the mower by **model prefix** (`is_mower()`), not category alone, so
-  setup succeeds across versions and never enters the retry loop.
-- Setup costs **one** `home_data` call — seed the coordinator from the discovery
-  `device_status` (`async_set_updated_data`) instead of a second poll in
-  `async_config_entry_first_refresh`.
-- The coordinator polls only **hourly** (24/day) and treats `RoborockRateLimit`
-  as "keep the last push-fed state"; commands never trigger a REST refresh
-  (state arrives over the MQTT DPS push). Do not lower `UPDATE_INTERVAL`.
+**`get_home_data` is rate-limited per account** (python-roborock: 1/s, 3/min,
+5/hour, 40/day; the account budget is shared with the official Roborock
+integration and the app). Earlier versions burned it with `ConfigEntryNotReady`
+retry loops. Mitigations, all shipped (see §6 "Startup / restart behaviour"):
+model-prefix matching (`is_mower()`), one call per setup, persisted snapshot with
+fallback, reuse of recent snapshots, no retry loop when no mower is listed, a 2 h
+safety-net poll, and commands never trigger a REST refresh. Do not lower
+`UPDATE_INTERVAL`.
 
 **Open / future work**
 - Full map grid (`GET_FULL_MAP`) still returns no decodable `map` on the cloud
@@ -373,7 +409,7 @@ shipped:
 
 ## 10. References
 
-- python-roborock: <https://github.com/Python-roborock/python-roborock>
+- python-roborock: <https://github.com/Python-roborock/python-roborock> (bundled copy in `vendor/`)
   - `roborock/devices/device_manager.py` — protocol selection by `pv`.
   - `roborock/devices/transport/mqtt_channel.py` — topics, publish/subscribe.
   - `roborock/protocols/v1_protocol.py` — V1 payload encode/decode.

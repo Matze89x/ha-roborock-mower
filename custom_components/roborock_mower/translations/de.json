@@ -1,0 +1,141 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Roborock-Mähroboter-Konto",
+        "description": "Gib die E-Mail-Adresse deines Roborock-Kontos ein, um einen Bestätigungscode zu erhalten.",
+        "data": {
+          "username": "E-Mail",
+          "region": "Region"
+        }
+      },
+      "code": {
+        "title": "Bestätigungscode",
+        "description": "Gib den Bestätigungscode ein, der an deine E-Mail-Adresse gesendet wurde.",
+        "data": {
+          "code": "Code"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Roborock-Konto erneut anmelden",
+        "description": "Die Anmeldung für {username} ist nicht mehr gültig. Absenden, um einen neuen Bestätigungscode per E-Mail zu erhalten."
+      }
+    },
+    "error": {
+      "invalid_email": "Konto existiert nicht",
+      "invalid_email_format": "Ungültiges E-Mail-Format",
+      "invalid_code": "Ungültiger Bestätigungscode",
+      "invalid_email_or_region": "Ungültige E-Mail-Adresse oder Region",
+      "too_frequent_code_requests": "Zu viele Code-Anfragen, bitte später erneut versuchen",
+      "unknown_url": "Unbekannter URL-Fehler",
+      "unknown_roborock": "Unbekannter Roborock-Fehler",
+      "unknown": "Unbekannter Fehler",
+      "no_mower_devices": "Kein Mähroboter in diesem Konto gefunden"
+    },
+    "abort": {
+      "already_configured_account": "Dieses Konto ist bereits eingerichtet",
+      "reauth_successful": "Erneute Anmeldung erfolgreich",
+      "wrong_account": "Dieser Bestätigungscode gehört zu einem anderen Roborock-Konto"
+    }
+  },
+  "selector": {
+    "region": {
+      "options": {
+        "auto": "Automatisch",
+        "us": "USA",
+        "eu": "Europa",
+        "ru": "Russland",
+        "cn": "China"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery": {
+        "name": "Akku"
+      },
+      "mow_progress": {
+        "name": "Mähfortschritt"
+      },
+      "charge_state": {
+        "name": "Ladezustand"
+      },
+      "charge_type": {
+        "name": "Grund für Rückkehr zur Station"
+      },
+      "pend_type": {
+        "name": "Pausengrund"
+      },
+      "error_code": {
+        "name": "Fehlercode"
+      },
+      "blade_lifespan": {
+        "name": "Messer-Lebensdauer"
+      },
+      "mow_state": {
+        "name": "Mähstatus"
+      },
+      "mow_type": {
+        "name": "Mähmodus"
+      }
+    },
+    "number": {
+      "mow_height": {
+        "name": "Schnitthöhe"
+      }
+    },
+    "select": {
+      "mow_eff_mode": {
+        "name": "Effizienzmodus"
+      },
+      "mow_area": {
+        "name": "Mähzone"
+      }
+    },
+    "button": {
+      "edge_cut": {
+        "name": "Kantenschnitt"
+      },
+      "stop": {
+        "name": "Stopp"
+      },
+      "cancel_dock": {
+        "name": "Rückkehr abbrechen"
+      }
+    }
+  },
+  "services": {
+    "mow_areas": {
+      "name": "Zonen mähen",
+      "description": "Startet das Mähen ausgewählter, gespeicherter Zonen. Die Zonen-IDs liefert die Aktion „Zonen auflisten“ (oder die Roborock-App).",
+      "fields": {
+        "device_id": {
+          "name": "Mähroboter",
+          "description": "Der/die zu verwendende(n) Roborock-Mähroboter."
+        },
+        "area_ids": {
+          "name": "Zonen-IDs",
+          "description": "Eine oder mehrere IDs gespeicherter Zonen."
+        },
+        "area_names": {
+          "name": "Zonennamen",
+          "description": "Optionale Namen passend zu den IDs (gleiche Reihenfolge). Nur kosmetisch."
+        }
+      }
+    },
+    "list_areas": {
+      "name": "Zonen auflisten",
+      "description": "Gibt die gespeicherten Zonen, Kartennamen und Kartengrenzen des Mähers zurück (nach bestem Bemühen).",
+      "fields": {
+        "device_id": {
+          "name": "Mähroboter",
+          "description": "Der/die abzufragende(n) Roborock-Mähroboter."
+        },
+        "map_name": {
+          "name": "Kartenname",
+          "description": "Optionaler Name der gespeicherten Karte (Standard: aktive Karte)."
+        }
+      }
+    }
+  }
+}
