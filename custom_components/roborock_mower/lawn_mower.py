@@ -15,63 +15,30 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .coordinator import MowerConfigEntry, RoborockMowerCoordinator
 from .entity import RoborockMowerEntity
 from .mower_api import (
-    MOW_STATES_DOCKED,
-    MOW_STATES_ERROR,
-    MOW_STATES_MOWING,
+    ACTIVITY_DOCKED,
+    ACTIVITY_ERROR,
+    ACTIVITY_IDLE,
+    ACTIVITY_MOWING,
+    ACTIVITY_PAUSED,
+    ACTIVITY_RETURNING,
     MOW_STATES_PAUSED,
-    MOW_STATES_RETURNING,
+    derive_activity,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-MOW_STATE_IDLE = 0
-
-# LawnMowerActivity.RETURNING was added after the original lawn_mower enum;
-# fall back to MOWING on HA versions that predate it so the entity still loads.
-_RETURNING = getattr(LawnMowerActivity, "RETURNING", LawnMowerActivity.MOWING)
-
-# off_dock_no_task_status (DP 143): 3 = DOCKING (returning to dock).
-_OFF_DOCK_DOCKING = 3
-# dock_state (DP 128) DockStateDpValue: 1 MOVING_TO_TARGET, 2 DOCKING.
-_DOCK_STATE_RETURNING = frozenset({1, 2})
+_ACTIVITIES: dict[str, LawnMowerActivity] = {
+    ACTIVITY_MOWING: LawnMowerActivity.MOWING,
+    ACTIVITY_PAUSED: LawnMowerActivity.PAUSED,
+    ACTIVITY_RETURNING: LawnMowerActivity.RETURNING,
+    ACTIVITY_DOCKED: LawnMowerActivity.DOCKED,
+    ACTIVITY_ERROR: LawnMowerActivity.ERROR,
+    # "Stopped, but neither docked nor paused" (HA 2025.x+); older HA: docked.
+    ACTIVITY_IDLE: getattr(LawnMowerActivity, "IDLE", LawnMowerActivity.DOCKED),
+}
 
 # Unmapped mow_state codes already reported (warn once per code, not per write).
 _REPORTED_UNMAPPED: set[int] = set()
-
-
-def _derive_activity(
-    mow_state: int | None,
-    error_code: int | None,
-    off_dock_no_task_status: int | None,
-    dock_state: int | None,
-) -> LawnMowerActivity:
-    """Map the mower's RobotDetailState (DP 123) to a lawn-mower activity."""
-    if error_code or (mow_state is not None and mow_state in MOW_STATES_ERROR):
-        return LawnMowerActivity.ERROR
-    if mow_state in MOW_STATES_PAUSED:
-        return LawnMowerActivity.PAUSED
-    if mow_state in MOW_STATES_RETURNING or dock_state in _DOCK_STATE_RETURNING:
-        return _RETURNING
-    if mow_state in MOW_STATES_MOWING:
-        return LawnMowerActivity.MOWING
-    if mow_state in MOW_STATES_DOCKED:
-        # Idle but off the dock with no task means it is heading back.
-        if mow_state == MOW_STATE_IDLE and off_dock_no_task_status == _OFF_DOCK_DOCKING:
-            return _RETURNING
-        return LawnMowerActivity.DOCKED
-    if mow_state in (None, MOW_STATE_IDLE):
-        if off_dock_no_task_status == _OFF_DOCK_DOCKING:
-            return _RETURNING
-        return LawnMowerActivity.DOCKED
-    # Unknown non-idle code: treat as active and log so it can be mapped later.
-    if mow_state not in _REPORTED_UNMAPPED:
-        _REPORTED_UNMAPPED.add(mow_state)
-        _LOGGER.warning(
-            "Unmapped mower mow_state %s; treating as mowing. Please report it "
-            "together with the integration diagnostics",
-            mow_state,
-        )
-    return LawnMowerActivity.MOWING
 
 
 async def async_setup_entry(
@@ -101,12 +68,17 @@ class RoborockLawnMowerEntity(RoborockMowerEntity, LawnMowerEntity):
     @property
     def activity(self) -> LawnMowerActivity:
         status = self.status
-        return _derive_activity(
-            status.mow_state,
-            status.error_code,
-            status.off_dock_no_task_status,
-            status.dock_state,
-        )
+        activity = derive_activity(status, self.coordinator.mower_api.return_pending)
+        if activity is None:
+            if status.mow_state not in _REPORTED_UNMAPPED:
+                _REPORTED_UNMAPPED.add(status.mow_state)
+                _LOGGER.warning(
+                    "Unmapped mower mow_state %s; treating as mowing. Please report "
+                    "it together with the integration diagnostics",
+                    status.mow_state,
+                )
+            return LawnMowerActivity.MOWING
+        return _ACTIVITIES[activity]
 
     # NOTE: commands do not trigger a REST refresh -- the resulting state change
     # arrives over the MQTT DPS push (get_home_data is rate-limited; see the

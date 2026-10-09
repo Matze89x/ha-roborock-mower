@@ -17,10 +17,12 @@ numbers in comments are for reference only. See DEVELOPING.md for the full map.
 
 from __future__ import annotations
 
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import datetime
 import json
 import logging
 import time
-from dataclasses import dataclass, field
 from typing import Any
 
 try:
@@ -125,7 +127,8 @@ BUTTON_DOCK_END = "DOCK_END"  # cancel an in-progress return-to-dock
 # DPS 133 reports the same 1/2/3 value (rock.iot MowEffModeDpValue). The UI
 # labels below drive the select; EFF_MODE_WIRE is the protobuf enum *name* the
 # device uses in the preference config (confirmed live: effective:"DAILY").
-EFF_MODE_LABELS: dict[int, str] = {1: "Daily", 2: "Efficient", 3: "Manicure"}
+# Option keys; the select translates them (e.g. "daily" -> "Täglich").
+EFF_MODE_LABELS: dict[int, str] = {1: "daily", 2: "efficient", 3: "manicure"}
 EFF_MODE_REVERSE: dict[str, int] = {v: k for k, v in EFF_MODE_LABELS.items()}
 EFF_MODE_WIRE: dict[int, str] = {1: "DAILY", 2: "EFFICIENT", 3: "MANICURE"}
 
@@ -157,7 +160,7 @@ CHARGE_STATE_LABELS: dict[int, str] = {
     5: "charge_error",
 }
 CHARGE_TYPE_LABELS: dict[int, str] = {
-    0: "unknown",
+    0: "none",
     1: "manual_dock",
     2: "rain_dock",
     3: "do_not_disturb_dock",
@@ -244,15 +247,78 @@ ROBOT_DETAIL_STATE_LABELS: dict[int, str] = {
     154: "charge_fault",
 }
 
-# Coarse activity classification of mow_state (DP 123). Any non-idle code not
-# listed is treated as MOWING (active) and logged, so new firmware codes surface.
+# Coarse activity classification of mow_state (DP 123). A code in none of
+# these sets is reported (once) and treated as mowing, so new firmware codes
+# surface instead of silently showing a wrong state.
 MOW_STATES_MOWING = frozenset({51, 52, 53, 54, 55, 56, 57, 64, 65, 66, 70})
 MOW_STATES_PAUSED = frozenset({17, 58, 67, 75, 107})
 MOW_STATES_RETURNING = frozenset({71, 72})
-MOW_STATES_ERROR = frozenset({3, 15, 16, 59, 60, 69, 73, 74, 108, 109, 154})
+MOW_STATES_ERROR = frozenset({3, 15, 16, 18, 59, 60, 69, 73, 74, 108, 109, 154})
+# Map-building task (MAP_*): the mower is out driving.
+MOW_STATES_MAPPING = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14})
+# No task running. Whether the mower sits on the dock is told by charge_state.
+MOW_STATES_IDLE = frozenset({0, 101, 102, 103})
+# Docking-related end states (reason or charging). Off the dock they mean the
+# mower is still on its way there.
 MOW_STATES_DOCKED = frozenset(
-    {0, 61, 62, 63, 68, 76, 77, 101, 104, 105, 106, 151, 152, 153}
+    {61, 62, 63, 68, 76, 77, 104, 105, 106, 151, 152, 153}
 )
+
+# charge_state (DP 127) values reported only while the mower is on the dock.
+CHARGE_STATES_ON_DOCK = frozenset({1, 2, 3, 5})
+# dock_state (DP 128) DockStateDpValue: 1 MOVING_TO_TARGET, 2 DOCKING.
+DOCK_STATES_RETURNING = frozenset({1, 2})
+# off_dock_no_task_status (DP 143): 3 = DOCKING (returning to dock).
+OFF_DOCK_DOCKING = 3
+
+ACTIVITY_MOWING = "mowing"
+ACTIVITY_PAUSED = "paused"
+ACTIVITY_RETURNING = "returning"
+ACTIVITY_DOCKED = "docked"
+ACTIVITY_IDLE = "idle"
+ACTIVITY_ERROR = "error"
+
+# How long a return-to-dock sent from Home Assistant counts as "returning"
+# while the mower has not reached the dock yet.
+RETURN_PENDING_TIMEOUT = 30 * 60
+
+# Entries kept in the in-memory event history (shown in the diagnostics).
+HISTORY_SIZE = 300
+
+
+def derive_activity(status: MowerStatus, return_pending: bool = False) -> str | None:
+    """Coarse activity (ACTIVITY_*) from the mower's data points.
+
+    ``mow_state`` (DP 123) says what task runs; ``charge_state`` (DP 127) says
+    whether the mower sits on the dock. Without the latter, an idle mower
+    driving back would wrongly read as docked. Returns None for an unknown
+    ``mow_state`` code.
+    """
+    ms = status.mow_state
+    if status.error_code or ms in MOW_STATES_ERROR:
+        return ACTIVITY_ERROR
+    if ms in MOW_STATES_PAUSED:
+        return ACTIVITY_PAUSED
+    if (
+        ms in MOW_STATES_RETURNING
+        or status.dock_state in DOCK_STATES_RETURNING
+        or status.off_dock_no_task_status == OFF_DOCK_DOCKING
+    ):
+        return ACTIVITY_RETURNING
+    if ms in MOW_STATES_MOWING or ms in MOW_STATES_MAPPING:
+        return ACTIVITY_MOWING
+    if ms is not None and ms not in MOW_STATES_IDLE and ms not in MOW_STATES_DOCKED:
+        return None
+    charge_state = status.charge_state
+    if charge_state is None:
+        # Firmware without DP 127: trust the state code alone.
+        return ACTIVITY_DOCKED
+    if charge_state in CHARGE_STATES_ON_DOCK:
+        return ACTIVITY_DOCKED
+    # Off the dock and no mowing task: on its way back, or simply stopped.
+    if return_pending or ms in MOW_STATES_DOCKED or status.charge_type:
+        return ACTIVITY_RETURNING
+    return ACTIVITY_IDLE
 
 
 @dataclass
@@ -321,6 +387,11 @@ class MowerStatus:
         )
 
     @property
+    def on_dock(self) -> bool:
+        """Whether charge_state says the mower sits on its dock."""
+        return self.charge_state in CHARGE_STATES_ON_DOCK
+
+    @property
     def mow_state_label(self) -> str | None:
         """Human label for mow_state (RobotDetailState); raw string if unknown."""
         if self.mow_state is None:
@@ -383,6 +454,19 @@ def areas_from_preference_config(cfg: dict[str, Any] | None) -> list[dict[str, A
     return areas
 
 
+class MowerCommandRejected(RoborockException):
+    """The mower answered a command with ``["fail"]``."""
+
+
+def _now() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _short(value: Any, limit: int = 300) -> str:
+    text = value if isinstance(value, str) else repr(value)
+    return text if len(text) <= limit else f"{text[:limit]}..."
+
+
 def _boundaries_payload(areas: list[dict[str, Any]]) -> dict[str, Any]:
     """Build a modify_map payload from selected areas ({id, name} each)."""
     return {
@@ -413,6 +497,11 @@ class MowerApi:
         self.push_count = 0
         self.last_push_monotonic: float | None = None
         self.online: bool | None = None
+        # Saved areas (zones) once discovered; used by the edge cut.
+        self.areas: list[dict[str, Any]] | None = None
+        # Commands, answers and data-point changes, newest last (diagnostics).
+        self.history: deque[dict[str, Any]] = deque(maxlen=HISTORY_SIZE)
+        self._return_requested_at: float | None = None
 
     @property
     def duid(self) -> str:
@@ -437,21 +526,46 @@ class MowerApi:
             return None
         return time.monotonic() - self.last_push_monotonic
 
+    @property
+    def return_pending(self) -> bool:
+        """A return-to-dock sent from Home Assistant has not arrived yet."""
+        if self._return_requested_at is None:
+            return False
+        if time.monotonic() - self._return_requested_at > RETURN_PENDING_TIMEOUT:
+            self._return_requested_at = None
+        return self._return_requested_at is not None
+
+    def _record(self, kind: str, **data: Any) -> None:
+        self.history.append({"time": _now(), "kind": kind, **data})
+
+    def _merge(self, dps: dict[int, Any], source: str) -> MowerStatus:
+        changed = {
+            str(code): value
+            for code, value in dps.items()
+            if self._dps.get(code) != value and code != DPS_GPS_COORDINATE
+        }
+        self._dps.update(dps)
+        if changed:
+            self._record(source, dps=changed)
+        status = self.status
+        if status.on_dock:
+            self._return_requested_at = None
+        return status
+
     def apply_push(self, dps: dict[int, Any]) -> MowerStatus:
         """Merge a live DPS push into current state and return updated status."""
-        self._dps.update(dps)
         self.push_count += 1
         self.last_push_monotonic = time.monotonic()
-        return self.status
+        return self._merge(dps, "push")
 
     def apply_home_data(self, home_data: Any) -> MowerStatus:
         """Merge this mower's device_status from a home_data snapshot."""
         entry = home_data.device_products.get(self._duid)
-        if entry is not None:
-            device, _product = entry
-            self._dps.update(coerce_dps(device.device_status))
-            self.online = getattr(device, "online", None)
-        return self.status
+        if entry is None:
+            return self.status
+        device, _product = entry
+        self.online = getattr(device, "online", None)
+        return self._merge(coerce_dps(device.device_status), "cloud_snapshot")
 
     async def poll_status(self) -> MowerStatus:
         """Refresh status from the cloud home_data device_status snapshot."""
@@ -467,18 +581,26 @@ class MowerApi:
         ``rpc_channel.send_command('remote_pb', params=<obj>)``.
         """
         message = {"id": str(int(time.time() * 1000)), **payload}
-        _LOGGER.debug("[%s] remote_pb %s", self._duid, payload.get("type"))
-        result = await self._channel.rpc_channel.send_command(
-            "remote_pb", params=message
+        command = " ".join(
+            str(part) for part in (payload.get("type"), payload.get("app_button")) if part
         )
-        _LOGGER.debug("[%s] remote_pb %s -> %s", self._duid, payload.get("type"), result)
+        entry: dict[str, Any] = {"command": command}
+        if "modify_map" in payload:
+            entry["areas"] = payload["modify_map"]
+        try:
+            result = await self._channel.rpc_channel.send_command(
+                "remote_pb", params=message
+            )
+        except RoborockException as err:
+            self._record("command", **entry, error=_short(str(err)))
+            _LOGGER.debug("[%s] remote_pb %s failed: %s", self._duid, command, _short(str(err)))
+            raise
+        self._record("command", **entry, result=_short(result))
+        _LOGGER.debug("[%s] remote_pb %s -> %s", self._duid, command, _short(result))
         if result == _REJECTED_RESULT or (
             isinstance(result, list) and _REJECTED_RESULT in result
         ):
-            raise RoborockException(
-                f"Mower rejected {payload.get('type')} "
-                f"{payload.get('app_button') or ''}".strip()
-            )
+            raise MowerCommandRejected(f"Mower rejected {command}")
         return result
 
     async def _send_button(self, app_button: str, **extra: Any) -> Any:
@@ -515,18 +637,33 @@ class MowerApi:
 
     # -- mowing controls (app-faithful remote_pb app_button) -------------------
 
+    async def _send_task_button(self, app_button: str, **extra: Any) -> Any:
+        """Send a button that starts/changes a task (ends a pending return)."""
+        self._return_requested_at = None
+        return await self._send_button(app_button, **extra)
+
     async def start(self) -> Any:
         """Start a full-lawn mow (AppButton MOW_GLOBAL)."""
-        return await self._send_button(BUTTON_MOW_GLOBAL)
+        return await self._send_task_button(BUTTON_MOW_GLOBAL)
 
     async def edge_cut(self, areas: list[dict[str, Any]] | None = None) -> Any:
         """Start an edge / perimeter cut (AppButton MOW_EDGE).
 
-        Bare (no ``areas``) edges the whole current map -- confirmed working on
-        the a222. Pass ``areas`` to scope the edge to specific boundaries.
+        Like the app (which makes you pick the area first), the edge cut is sent
+        for the saved areas -- all of them unless ``areas`` narrows it down. If
+        no area is known, or the mower rejects the area list, it is sent bare,
+        which edges the whole current map on firmware that accepts that.
         """
-        extra = {"modify_map": _boundaries_payload(areas)} if areas else {}
-        return await self._send_button(BUTTON_MOW_EDGE, **extra)
+        if areas is None:
+            areas = self.areas if self.areas is not None else await self.get_areas()
+        if areas:
+            try:
+                return await self._send_task_button(
+                    BUTTON_MOW_EDGE, modify_map=_boundaries_payload(areas)
+                )
+            except MowerCommandRejected:
+                _LOGGER.debug("[%s] edge cut with areas rejected; retrying bare", self._duid)
+        return await self._send_task_button(BUTTON_MOW_EDGE)
 
     async def start_area_mow(self, areas: list[dict[str, Any]]) -> Any:
         """Start a select-area (zone) mow (AppButton MOW_SELECT).
@@ -536,29 +673,32 @@ class MowerApi:
         """
         if not areas:
             raise ValueError("start_area_mow requires at least one area")
-        return await self._send_button(
+        return await self._send_task_button(
             BUTTON_MOW_SELECT, modify_map=_boundaries_payload(areas)
         )
 
     async def pause(self) -> Any:
         """Pause the running mow (AppButton MOW_PAUSE)."""
-        return await self._send_button(BUTTON_MOW_PAUSE)
+        return await self._send_task_button(BUTTON_MOW_PAUSE)
 
     async def resume(self) -> Any:
         """Resume a paused mow (AppButton MOW_RESUME)."""
-        return await self._send_button(BUTTON_MOW_RESUME)
+        return await self._send_task_button(BUTTON_MOW_RESUME)
 
     async def stop(self) -> Any:
         """Stop / end the current mow task (AppButton MOW_END)."""
-        return await self._send_button(BUTTON_MOW_END)
+        return await self._send_task_button(BUTTON_MOW_END)
 
     async def dock(self) -> Any:
         """Return to the dock and charge (AppButton CHARGE)."""
-        return await self._send_button(BUTTON_CHARGE)
+        result = await self._send_button(BUTTON_CHARGE)
+        if not self.status.on_dock:
+            self._return_requested_at = time.monotonic()
+        return result
 
     async def cancel_dock(self) -> Any:
         """Cancel an in-progress return-to-dock (AppButton DOCK_END)."""
-        return await self._send_button(BUTTON_DOCK_END)
+        return await self._send_task_button(BUTTON_DOCK_END)
 
     # -- settings --------------------------------------------------------------
 
@@ -644,7 +784,11 @@ class MowerApi:
         reliably. Feed an ``id`` to :meth:`start_area_mow` or the ``mow_areas``
         service.
         """
-        return areas_from_preference_config(await self.get_mow_preference_config())
+        cfg = await self.get_mow_preference_config()
+        if cfg is None:
+            return self.areas or []
+        self.areas = areas_from_preference_config(cfg)
+        return self.areas
 
     async def get_map_names(self) -> list[str]:
         """Best-effort list of saved map names (empty if unavailable)."""

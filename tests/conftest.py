@@ -216,7 +216,7 @@ def mock_roborock(
             0,
         ),
         patch(
-            "custom_components.roborock_mower.select.AREA_DISCOVERY_RETRY_DELAYS",
+            "custom_components.roborock_mower.button.AREA_DISCOVERY_RETRY_DELAYS",
             (0, 0, 0, 0),
         ),
     ):

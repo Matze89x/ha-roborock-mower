@@ -15,40 +15,22 @@ Home-Assistant-Integration für **Roborock-Mähroboter** (RockNeo, z. B. Q105 /
 > Die Versionierung beginnt neu bei **0.1.0**. Danke an das Original für das
 > Reverse-Engineering des Mäher-Protokolls.
 
-## Neu in 0.1.0 (Kurzfassung)
+## Änderungen
 
-- **Läuft parallel zur offiziellen Roborock-Integration.** Die Integration bringt
-  ihre **eigene Kopie von python-roborock 7.12.1** (neueste Version) mit und
-  verlangt kein `python-roborock` mehr von Home Assistant. Vorher erzwang sie
-  `python-roborock <6.0`, die offizielle Integration aber 7.x – HA hat bei jedem
-  Neustart hin- und herinstalliert und die offizielle Integration brach mit
-  `ImportError` ab. Das ist behoben.
-- **Robuster Neustart:** Gerätedaten werden zwischengespeichert. Ist die Cloud
-  beim Start nicht erreichbar oder das Roborock-Abruflimit erreicht, startet die
-  Integration aus dem Cache statt mit Fehler. MQTT-Probleme direkt nach dem Booten
-  führen zu einem automatischen Neuversuch (statt dauerhaftem Fehler) ohne
-  hängende Verbindungen.
-- **Weitere Fehler behoben:** „Unable to remove unknown job listener“ beim
-  Neustart; ungültige `services.yaml`; Entitäten wurden nach einem
-  fehlgeschlagenen Cloud-Abruf für eine Stunde „nicht verfügbar“; vom Mäher
-  abgelehnte Befehle wurden still ignoriert (jetzt Fehlermeldung); Endlos-Neuversuche,
-  wenn kein Mäher gefunden wird; Log-Spam bei unbekannten Statuscodes.
-- **Neu:** Diagnose-Download, Re-Authentifizierung bei abgelaufener Anmeldung,
-  deutsche Übersetzung, Routinen/Zonen werden im Hintergrund geladen (blockieren
-  den Start nicht), automatische Tests + GitHub-Prüfung (hassfest, HACS).
-
-Alle Details: [CHANGELOG.md](CHANGELOG.md).
+Was sich in welcher Version geändert hat, steht in den
+[Releases](https://github.com/Matze89x/ha-roborock-mower/releases).
 
 ## Funktionen
 
 - **Rasenmäher-Entität** – Mähen starten (ganze Fläche), Pause, Fortsetzen,
-  zurück zur Station; Status: mäht / pausiert / kehrt zurück / an der Station / Fehler
-- **Kantenschnitt** (Taste) – startet den Kanten-/Randschnitt
+  zurück zur Station; Status: mäht / pausiert / kehrt zurück / angedockt / untätig / Fehler
+- **Kantenschnitt** (Taste) – startet den Kanten-/Randschnitt für die gespeicherten Zonen
 - **Stopp** und **Rückkehr abbrechen** (Tasten)
 - **Sensoren** – Akku, Mähfortschritt, Mähstatus, Mähmodus, Ladezustand, Fehlercode,
-  Grund für Rückkehr, Pausengrund, Messer-Lebensdauer (teils Diagnose / standardmäßig aus)
-- **Schnitthöhe** (Zahl) und **Effizienzmodus** (Auswahl: Daily / Efficient / Manicure)
-- **Mähzone** (Auswahl) – gespeicherte Zone wählen = Zonenmähen starten
+  Grund für Rückkehr, Pausengrund, Messer-Lebensdauer (teils Diagnose / standardmäßig
+  aus); Statuswerte auf Deutsch und Englisch
+- **Schnitthöhe** (Zahl) und **Effizienzmodus** (Auswahl: Täglich / Effizient / Feinschnitt)
+- **Zone mähen: …** (eine Taste pro gespeicherter Zone) – startet das Zonenmähen
 - **Routinen** aus der Roborock-App erscheinen als Tasten
 - **Aktionen** `roborock_mower.mow_areas` (Zonen mähen) und
   `roborock_mower.list_areas` (Zonen auflisten)
@@ -88,13 +70,15 @@ kopieren und Home Assistant neu starten.
 
 ## Fehlersuche – was du mir schicken kannst
 
-1. **Diagnose herunterladen:** Einstellungen → Geräte & Dienste → Roborock Mower →
-   ⋮ → **Diagnose herunterladen**. Enthält Versionen, Verbindungsstatus,
-   Roh-Datenpunkte (DPS) und das Produktschema. Zugangsdaten, E-Mail,
-   Seriennummer, Schlüssel und GPS-Position sind geschwärzt.
-2. **Debug-Protokoll:** dort ⋮ → **Debug-Protokollierung aktivieren**, das
-   Problem nachstellen (z. B. Mähen starten, Kantenschnitt, Rückkehr), dann
-   deaktivieren – das Log wird heruntergeladen. Alternativ in `configuration.yaml`:
+1. **Test durchführen** (z. B. Mähen starten, Pause, Kantenschnitt, Rückkehr) und
+   kurz notieren, **was der Mäher wann tatsächlich gemacht hat**.
+2. Danach **Diagnose herunterladen:** Einstellungen → Geräte & Dienste → Roborock
+   Mower → ⋮ → **Diagnose herunterladen**. Sie enthält einen **Verlauf** der
+   letzten 300 Befehle, Antworten und Statusänderungen mit Uhrzeit, außerdem
+   Versionen, Verbindungsstatus, Roh-Datenpunkte (DPS) und das Produktschema.
+   Zugangsdaten, E-Mail, Seriennummer, Schlüssel und GPS-Position sind geschwärzt.
+3. Nur falls nötig ein **Debug-Protokoll** über `configuration.yaml`, so ist auch
+   der Start enthalten:
 
    ```yaml
    logger:
@@ -102,15 +86,16 @@ kopieren und Home Assistant neu starten.
      logs:
        custom_components.roborock_mower: debug
    ```
-3. Dazu kurz notieren, **was der Mäher wann tatsächlich gemacht hat** (mäht,
-   Kante, pausiert, fährt zurück, Fehler) – damit lassen sich die Statuscodes
-   zuordnen. Warnungen „Unmapped mower mow_state …“ bitte immer mitschicken.
+
+   Die eingebaute Library bleibt dabei bewusst auf INFO, sonst entstehen
+   hunderte MB. Warnungen „Unmapped mower mow_state …“ oder „Unknown … value“
+   bitte immer mitschicken.
 
 ## Karte
 
 Die Rasen-/Zonenkarte wird (noch) nicht als Bild dargestellt: Die App lädt sie als
 Datei aus dem Roborock-Cloudspeicher über ihr natives SDK, das noch nicht
-nachgebaut ist. Die gespeicherten **Zonen** sind über die Auswahl „Mähzone“
+nachgebaut ist. Die gespeicherten **Zonen** sind über die Tasten „Zone mähen: …“
 nutzbar. Details: [PROTOCOL.md](PROTOCOL.md) §7.
 
 ## Funktionsweise (kurz)
@@ -142,36 +127,21 @@ integration** (vacuums).
 > and is developed further here as **Roborock Mower**. Versioning restarts at
 > **0.1.0**. Thanks to the original for reverse-engineering the mower protocol.
 
-## What's new in 0.1.0 (summary)
+## Changes
 
-- **Runs alongside the official Roborock integration.** The integration bundles
-  its **own copy of python-roborock 7.12.1** (latest) and no longer requires
-  `python-roborock` from Home Assistant. It used to pin `python-roborock <6.0`
-  while the official integration pins 7.x, so HA swapped versions on every
-  restart and the official integration failed with `ImportError`s. Fixed.
-- **Robust restarts:** device data is cached. If the cloud is unreachable or the
-  Roborock request limit is reached at startup, the integration starts from the
-  cache instead of failing. MQTT problems right after boot trigger an automatic
-  retry (instead of a permanent error) without leaking connections.
-- **More fixes:** "Unable to remove unknown job listener" on restart; invalid
-  `services.yaml`; entities turning "unavailable" for an hour after one failed
-  cloud poll; commands rejected by the mower were silently ignored (now an
-  error); endless retries when no mower is found; log spam for unknown states.
-- **New:** diagnostics download, re-authentication, German translation, routines
-  and areas load in the background (never block startup), automated tests and
-  GitHub validation (hassfest, HACS).
-
-Full details: [CHANGELOG.md](CHANGELOG.md).
+What changed in which version is listed in the
+[releases](https://github.com/Matze89x/ha-roborock-mower/releases).
 
 ## Features
 
 - **Lawn mower entity** – start (full lawn), pause, resume, return to dock;
-  activity: mowing / paused / returning / docked / error
-- **Edge Cut**, **Stop** and **Cancel Dock** buttons
+  activity: mowing / paused / returning / docked / idle / error
+- **Edge Cut** (for the saved areas), **Stop** and **Cancel Dock** buttons
 - **Sensors** – battery, mow progress, mow state, mow mode, charge state, error
-  code, dock reason, pause reason, blade lifespan (some diagnostic / disabled by default)
+  code, dock reason, pause reason, blade lifespan (some diagnostic / disabled by
+  default); state values in English and German
 - **Mow Height** (number) and **Efficiency Mode** (select: Daily / Efficient / Manicure)
-- **Mow Area** select – picking a saved area starts a zone mow
+- **Mow zone: …** – one button per saved area starts a zone mow
 - **Routines** from the Roborock app appear as buttons
 - **Actions** `roborock_mower.mow_areas` and `roborock_mower.list_areas`
 
@@ -208,11 +178,14 @@ restart Home Assistant.
 
 ## Troubleshooting – what to send
 
-1. **Download diagnostics:** Settings → Devices & services → Roborock Mower → ⋮ →
-   **Download diagnostics** (versions, connection state, raw data points, product
-   schema; credentials, e-mail, serial, keys and GPS position are redacted).
-2. **Debug log:** ⋮ → **Enable debug logging**, reproduce the issue, disable it –
-   the log downloads. Or in `configuration.yaml`:
+1. **Run the test** (e.g. start, pause, edge cut, return to dock) and note **what
+   the mower actually did and when**.
+2. Then **download diagnostics:** Settings → Devices & services → Roborock Mower →
+   ⋮ → **Download diagnostics**. It contains a **history** of the last 300
+   commands, answers and state changes with timestamps, plus versions, connection
+   state, raw data points and the product schema. Credentials, e-mail, serial,
+   keys and GPS position are redacted.
+3. Only if needed, a **debug log** via `configuration.yaml` (includes startup):
 
    ```yaml
    logger:
@@ -220,14 +193,16 @@ restart Home Assistant.
      logs:
        custom_components.roborock_mower: debug
    ```
-3. Note **what the mower actually did and when** so state codes can be mapped;
-   always include "Unmapped mower mow_state …" warnings.
+
+   The bundled library deliberately stays at INFO, otherwise the log grows by
+   hundreds of MB. Always include "Unmapped mower mow_state …" or "Unknown …
+   value" warnings.
 
 ## Map
 
 The lawn/zone map is not rendered yet: the app downloads it as a file from
 Roborock's cloud storage via its native SDK, which has not been reverse-engineered.
-Saved **zones** are available through the Mow Area select. See
+Saved **zones** are available through the "Mow zone: …" buttons. See
 [PROTOCOL.md](PROTOCOL.md) §7.
 
 ## How it works (short)
