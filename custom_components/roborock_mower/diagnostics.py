@@ -121,9 +121,31 @@ def _mower_diagnostics(
             for item in (product.schema or [])
         ],
         "history": list(api.history),
-        # The last "save map data" recording, if any (for decoding the map).
-        "map_capture": api.last_capture,
+        # Facts about the map, without coordinates.
+        "map": coordinator.mower_map.summary if coordinator.mower_map else None,
+        "map_track_points": len(coordinator.track),
+        # What the last "save map data" recording got (contents stay out:
+        # they show the garden and the stream carries the GPS position).
+        "map_capture": _capture_summary(api.last_capture),
     }
+
+
+def _capture_summary(capture: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not capture:
+        return None
+    answers = {}
+    for name, answer in (capture.get("answers") or {}).items():
+        if isinstance(answer, dict) and ("error" in answer or "bytes" in answer):
+            answers[name] = {
+                key: answer[key] for key in ("bytes", "error") if key in answer
+            }
+        else:
+            answers[name] = "answered"
+    protocols: dict[str, int] = {}
+    for message in capture.get("messages") or []:
+        key = str(message.get("protocol"))
+        protocols[key] = protocols.get(key, 0) + 1
+    return {"answers": answers, "messages_by_protocol": protocols}
 
 
 async def async_get_config_entry_diagnostics(

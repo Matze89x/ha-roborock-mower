@@ -416,9 +416,6 @@
       "status_updated": {
         "name": "Status abgefragt"
       },
-      "mow_passes": {
-        "name": "Mähdurchgänge"
-      },
       "boundary_perception": {
         "name": "Randerkennung",
         "state": {
@@ -489,6 +486,9 @@
       },
       "mow_direction": {
         "name": "Mährichtung (benutzerdefinierter Winkel)"
+      },
+      "mow_passes": {
+        "name": "Mähdurchgänge"
       }
     },
     "select": {
@@ -535,6 +535,11 @@
     "switch": {
       "edge_cut_while_mowing": {
         "name": "Kantenschnitt beim Mähen"
+      }
+    },
+    "image": {
+      "map": {
+        "name": "Karte"
       }
     }
   },
@@ -623,7 +628,7 @@
     },
     "save_map_data": {
       "name": "Kartendaten speichern",
-      "description": "Fragt den Mäher nach seiner Karte und zeichnet alles auf, was er während der Wartezeit sendet. Die Antwort enthält die Daten (JSON lesbar, Binäres als Base64), sodass du sie einfach kopieren kannst; sie stehen auch in der Diagnose und werden als Dateien im Ordner roborock_mower deiner Konfiguration gespeichert. Dient dazu, das Kartenformat zu entschlüsseln. Kartendaten können deinen Garten zeigen: nur privat weitergeben.",
+      "description": "Fragt den Mäher nach seiner Karte und zeichnet alles auf, was er während der Wartezeit sendet. Die Antwort enthält die Daten, sodass du sie einfach kopieren kannst: JSON lesbar, Protobuf entschlüsselt mit geschwärzter GPS-Position, andere Binärdaten als Base64. Alles wird auch als Dateien im Ordner roborock_mower deiner Konfiguration gespeichert; die Diagnose listet nur auf, was ankam. Dient dazu, das Kartenformat zu entschlüsseln. Kartendaten können deinen Garten zeigen: nur privat weitergeben.",
       "fields": {
         "device_id": {
           "name": "Mähroboter",

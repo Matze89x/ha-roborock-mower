@@ -3,6 +3,42 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.4.0 – The map
+
+**Kurzfassung (Deutsch):** Die Karte ist da. Die neue Entität **Karte** zeigt
+deine Rasenzonen mit Namen und Fläche, die Ladestation, den Mäher mit
+Fahrtrichtung und seine Fahrspur, ähnlich wie die Roborock-App. Die Karte kommt
+über `get_map_diff` aus der Cloud, wie in der App. Sie wird beim Start geladen
+und neu geholt, sobald der Mäher eine geänderte Karte meldet. Beim Mähen kommt
+die Position alle zwei Sekunden aus dem Statusstrom des Mähers; das Bild folgt
+höchstens alle 10 Sekunden. Die **Mähdurchgänge** lassen sich jetzt unter
+Konfiguration einstellen (1–3) statt nur ablesen. Der Statusstrom enthält auch
+die GPS-Position. Die Integration liest sie nie aus, und „Kartendaten
+speichern“ zeigt sie geschwärzt. Die Diagnose enthält von der Karte nur
+Zonennamen und Flächen.
+
+### New
+
+- Image entity "Map" (SVG): zone boundaries, names and areas, charging
+  station, mower position with heading, and the track of the current or last
+  run. Read with `get_map_diff` through the map channel at start, again when
+  the status' `map_abstracts[0].file_change_time` changes, and after a failed
+  try at most every 30 minutes.
+- Live position while mowing from the protocol-702 status stream (field
+  5 → 12 → 6 → 8), else from the full status (`navigation.map.robot_pose`).
+- Number "Mowing passes" (`mow_times`, 1–3), written with
+  `SET_MOW_PREFERENCE`; it replaces the read-only sensor.
+- `map_data.py`: protobuf reader for the map and the stream, SVG drawing.
+  PROTOCOL.md §11 describes the map fields.
+
+### Changes
+
+- `save_map_data` shows protobuf messages (the map, the status stream)
+  decoded, with every 64-bit value (the GPS position) replaced by
+  `**REDACTED**`; the saved files stay unchanged.
+- Diagnostics: `map` (zone names and areas, no coordinates) and a summary of
+  the last map recording instead of its messages.
+
 ## 0.3.4 – Direction mode to choose
 
 **Kurzfassung (Deutsch):** Die Mährichtung lässt sich jetzt wie in der App

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -20,15 +20,21 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DOMAIN,
     HOME_DATA_REUSE_AGE,
+    MAP_RETRY_INTERVAL,
+    MAP_TIMEOUT,
     PREFERENCE_REFRESH_INTERVAL,
     ROBOT_STATUS_ACTIVE_INTERVAL,
     ROBOT_STATUS_IDLE_INTERVAL,
     ROBOT_STATUS_SETTLE_DELAY,
     ROBOT_STATUS_TIMEOUT,
     STALE_SNAPSHOT_REFRESH_INTERVAL,
+    TRACK_MAX_POINTS,
+    TRACK_MIN_STEP,
+    TRACK_RESET_GAP,
     UPDATE_INTERVAL,
 )
 from .home_data import HomeDataProvider
+from .map_data import MapView, MowerMap, Pose, parse_map, pose_from_status
 from .mower_api import (
     ACTIVITY_MOWING,
     ACTIVITY_PAUSED,
@@ -145,6 +151,16 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self.extra: dict[str, dict[str, Any]] = {}
         self._settings_due = True
         self._settings_read_at: float | None = None
+        # The map (get_map_diff), the mower's latest position and the track
+        # of its current or last run (positions in the map frame, metres).
+        self.mower_map: MowerMap | None = None
+        self.robot_pose: Pose | None = None
+        self.track: list[tuple[float, float]] = []
+        self._track_moved_at: float | None = None
+        self._map_tried_at: float | None = None
+        self._map_version: Any = None
+        self._map_failing = False
+        self._map_listeners: list[Callable[[], None]] = []
 
     async def _async_update_data(self) -> MowerStatus:
         api = self.mower_api
@@ -304,6 +320,11 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self._status_failing = False
         self.robot_status = redact_private(answer)
         self.robot_status_time = dt_util.utcnow()
+        if (pose := pose_from_status(answer)) is not None:
+            self.note_pose(pose)
+        version = dig(answer, "map_abstracts", 0, "file_change_time")
+        if self._map_due(version):
+            await self.async_refresh_map(version)
         if (
             self._settings_due
             or self._settings_read_at is None
@@ -332,6 +353,103 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
             self.extra[key] = redact_private(answer)
             if key == "FEATURE_INFO" and first:
                 self._update_device_model()
+
+    # -- map ----------------------------------------------------------------------
+
+    @property
+    def map_view(self) -> MapView | None:
+        """The map with the latest position and track, once the map is read."""
+        if self.mower_map is None:
+            return None
+        return MapView(self.mower_map, self.robot_pose, self.track)
+
+    @callback
+    def async_add_map_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
+        """Call ``listener`` when the map or the mower's position changes."""
+        self._map_listeners.append(listener)
+
+        def _remove() -> None:
+            if listener in self._map_listeners:
+                self._map_listeners.remove(listener)
+
+        return _remove
+
+    def _notify_map(self) -> None:
+        for listener in list(self._map_listeners):
+            listener()
+
+    def _map_due(self, version: Any) -> bool:
+        """Whether to read the map: none yet, or the mower reports a newer one.
+
+        ``version`` is the map file time of the full status. After a failed
+        try the map is asked again at most every 30 minutes.
+        """
+        if self.mower_map is not None and version == self._map_version:
+            return False
+        if self._map_tried_at is None or not self._map_failing:
+            return True
+        return time.monotonic() - self._map_tried_at > MAP_RETRY_INTERVAL.total_seconds()
+
+    async def async_refresh_map(self, version: Any = None) -> bool:
+        """Read the map from the mower (through the cloud map channel)."""
+        self._map_tried_at = time.monotonic()
+        try:
+            async with asyncio.timeout(MAP_TIMEOUT):
+                data = await self.mower_api.get_map_rpc("get_map_diff", map_channel=True)
+        except (RoborockException, TimeoutError) as err:
+            reason = str(err) or type(err).__name__
+            parsed = None
+        else:
+            parsed = parse_map(data) if isinstance(data, bytes) else None
+            reason = "no map in the answer"
+        if parsed is None:
+            if not self._map_failing:
+                _LOGGER.debug("[%s] Could not read the map: %s", self.device.duid, reason)
+            self._map_failing = True
+            return False
+        if self._map_failing or self.mower_map is None:
+            _LOGGER.debug(
+                "[%s] Map read: %s", self.device.duid, parsed.summary
+            )
+        self._map_failing = False
+        self._map_version = version
+        self.mower_map = parsed
+        if self.robot_pose is None:
+            self.robot_pose = parsed.robot
+        self._notify_map()
+        return True
+
+    @callback
+    def note_pose(self, pose: Pose) -> None:
+        """A new position of the mower (status poll or live status stream).
+
+        While the mower is out mowing (or on its way back) the positions make
+        up the track of the run; a new run starts a new track.
+        """
+        previous = self.robot_pose
+        self.robot_pose = pose
+        api = self.mower_api
+        activity = derive_activity(api.status, api.return_pending, api.task_pending)
+        now = time.monotonic()
+        if activity in (ACTIVITY_MOWING, ACTIVITY_RETURNING):
+            if (
+                self._track_moved_at is None
+                or now - self._track_moved_at > TRACK_RESET_GAP.total_seconds()
+            ):
+                self.track = []
+            last = self.track[-1] if self.track else None
+            if last is None or _distance(last, (pose.x, pose.y)) >= TRACK_MIN_STEP:
+                if len(self.track) >= TRACK_MAX_POINTS:
+                    # Keep the whole run in view: drop every second point.
+                    self.track = self.track[::2]
+                self.track.append((pose.x, pose.y))
+                self._track_moved_at = now
+        if previous is None or previous != pose:
+            self._notify_map()
+
+
+def _distance(a: tuple[float, float], b: tuple[float, float]) -> float:
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
 
 
 async def _quietly(call: Coroutine[Any, Any, Any]) -> Any:

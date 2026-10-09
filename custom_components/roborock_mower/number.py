@@ -22,6 +22,7 @@ async def async_setup_entry(
     entities: list[NumberEntity] = []
     for coord in entry.runtime_data.coordinators:
         entities.append(RoborockMowDirectionNumber(coord))
+        entities.append(RoborockMowPassesNumber(coord))
         if coord.supports_dp(DPS_MOW_HEIGHT):
             entities.append(RoborockMowHeightNumber(coord))
         else:
@@ -81,3 +82,29 @@ class RoborockMowDirectionNumber(RoborockPreferenceEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         await self._async_set_preference("Set mowing direction", direction=int(value))
+
+
+class RoborockMowPassesNumber(RoborockPreferenceEntity, NumberEntity):
+    """How often each spot is mown per run (preference ``mow_times``).
+
+    "Mähdurchgänge" in the app. Written with ``SET_MOW_PREFERENCE``.
+    """
+
+    _attr_translation_key = "mow_passes"
+    _attr_icon = "mdi:repeat"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = 1
+    _attr_native_max_value = 3
+    _attr_native_step = 1
+
+    def __init__(self, coordinator: RoborockMowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._device.duid}_mow_passes"
+
+    @property
+    def native_value(self) -> float | None:
+        return as_number(self.preference.get("mow_times"))
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self._async_set_preference("Set mowing passes", mow_times=int(value))
