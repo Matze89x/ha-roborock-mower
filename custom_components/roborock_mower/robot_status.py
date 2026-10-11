@@ -11,7 +11,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass, field
 import json
-from datetime import UTC, date, datetime, time as dt_time, timedelta
+from datetime import UTC, date, datetime, time as dt_time, timedelta, tzinfo
 from typing import Any
 
 # Keys whose values identify the owner's place or network; removed from
@@ -188,6 +188,51 @@ def next_plan_end(plan: Any, start: datetime | None) -> datetime | None:
     if begin is None or end is None or end <= begin:
         return None
     return start + timedelta(seconds=end - begin)
+
+
+_DAY_ABBREVIATIONS = {
+    "de": ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"),
+    "en": ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
+}
+_EVERY_DAY = {"de": "täglich", "en": "daily"}
+
+
+def plan_clock(plan: Any, tz: tzinfo) -> tuple[str, str] | None:
+    """Start and end of a plan as ``("08:00", "10:35")`` in ``tz``.
+
+    ``start``/``end`` are times on an old date; only the time of day counts.
+    """
+    if not isinstance(plan, dict):
+        return None
+    start = as_datetime(plan.get("start"), tz)
+    end = as_datetime(plan.get("end"), tz)
+    if start is None or end is None:
+        return None
+    return f"{start:%H:%M}", f"{end:%H:%M}"
+
+
+def plan_days_label(plan: Any, language: str) -> str:
+    """The plan's weekdays, short and with ranges: ``Mo–Sa``, ``Mo, Mi``."""
+    names = _DAY_ABBREVIATIONS["de" if language.startswith("de") else "en"]
+    days = sorted(
+        {
+            WEEKDAYS.index(day["type"])
+            for day in (plan.get("days") if isinstance(plan, dict) else None) or []
+            if isinstance(day, dict) and day.get("type") in WEEKDAYS
+        }
+    )
+    if len(days) == 7:
+        return _EVERY_DAY["de" if language.startswith("de") else "en"]
+    runs: list[list[int]] = []
+    for day in days:
+        if runs and day == runs[-1][-1] + 1:
+            runs[-1].append(day)
+        else:
+            runs.append([day])
+    return ", ".join(
+        f"{names[run[0]]}–{names[run[-1]]}" if len(run) > 2 else ", ".join(names[d] for d in run)
+        for run in runs
+    )
 
 
 def plan_days(plan: Any) -> list[str]:

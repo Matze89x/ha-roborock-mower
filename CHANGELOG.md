@@ -3,6 +3,27 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.5.2 – Mowing plans to switch
+
+**Kurzfassung (Deutsch):** Deine Mähpläne aus der App sind jetzt **Schalter**:
+einer pro Plan, benannt nach Zeit und Tagen, z. B. „Mähplan 08:00–10:35
+(Mo–Sa)“. An = Plan aktiv, aus = pausiert, genau wie der Schalter in der App.
+Legst du in der App einen Plan an, erscheint sein Schalter; löschst du ihn,
+verschwindet er. Damit kann eine Automation bei Regen die Pläne des Tages
+ausschalten, sodass Hugo gar nicht erst losfährt. Jede Änderung wird beim
+Mäher nachgelesen.
+
+### New
+
+- Switch per mowing plan (`GET_MOW_SCHEDULE`, `status` `OPEN` / `CLOSE`),
+  switched with `CHANGE_MOWING_PLAN` and the whole plan, then read back.
+  Named after time and weekdays (in the plan's time zone); attributes
+  `plan_id`, `start`, `end`, `days`, `mode`. Added and removed as the plans
+  in the app come and go.
+- The plans are read with the settings (every 30 minutes, after a change)
+  and right away when the mower reports another next plan.
+- Diagnostics probe `GET_MOW_SCHEDULE`; PROTOCOL.md §12 describes the plans.
+
 ## 0.5.1 – Settings to switch
 
 **Kurzfassung (Deutsch):** Deine Einstellungen lassen sich jetzt in Home

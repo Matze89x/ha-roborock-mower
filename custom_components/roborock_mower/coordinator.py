@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import json
 import logging
 import time
 from collections.abc import Callable, Coroutine
@@ -58,6 +59,7 @@ from .mower_api import (
     MowerApi,
     MowerStatus,
     derive_activity,
+    mow_plans,
     redact_dps,
 )
 from .robot_status import dig, redact_private
@@ -104,7 +106,12 @@ _BUSY_ACTIVITIES = frozenset({ACTIVITY_MOWING, ACTIVITY_PAUSED, ACTIVITY_RETURNI
 # Read with the mowing preferences (every 30 minutes, after a settings change
 # or an error): rain / do-not-disturb / anti-theft settings, the fault
 # history and the schedules per zone. The product details only once.
-SETTINGS_QUERIES = ("GET_USER_MODE_CONFIG", "GET_FAULT_RECORDS", "GET_ZONES_PLAN_INFO")
+SETTINGS_QUERIES = (
+    "GET_USER_MODE_CONFIG",
+    "GET_FAULT_RECORDS",
+    "GET_ZONES_PLAN_INFO",
+    "GET_MOW_SCHEDULE",
+)
 ONCE_QUERIES = ("GET_FEATURE_INFO",)
 
 
@@ -161,6 +168,7 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self.extra: dict[str, dict[str, Any]] = {}
         self._settings_due = True
         self._settings_read_at: float | None = None
+        self._next_plan_marker: str | None = None
         # The map (get_map_diff), the mower's latest position and the track
         # of its current or last run (positions in the map frame, metres).
         self.mower_map: MowerMap | None = None
@@ -334,6 +342,16 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self._status_failing = False
         self.robot_status = redact_private(answer)
         self.robot_status_time = dt_util.utcnow()
+        # A plan added, changed or switched in the app usually changes the
+        # next plan: read the plans (and settings) again right away.
+        next_plan = answer.get("next_plan")
+        marker = (
+            json.dumps(next_plan, sort_keys=True) if isinstance(next_plan, dict) else None
+        )
+        if marker != self._next_plan_marker:
+            if self._next_plan_marker is not None:
+                self._settings_due = True
+            self._next_plan_marker = marker
         if (pose := pose_from_status(answer)) is not None:
             self.note_pose(pose)
         version = dig(answer, "map_abstracts", 0, "file_change_time")
@@ -367,6 +385,17 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
             self.extra[key] = redact_private(answer)
             if key == "FEATURE_INFO" and first:
                 self._update_device_model()
+
+    @property
+    def mow_plans(self) -> list[dict[str, Any]] | None:
+        """The mowing plans as the mower last reported them (None: not read)."""
+        return mow_plans(self.extra.get("MOW_SCHEDULE"))
+
+    async def async_set_plan_open(self, plan_id: Any, open_: bool) -> None:
+        """Switch a mowing plan on or off and show the plans the mower reports."""
+        schedule = await self.mower_api.set_plan_open(plan_id, open_)
+        self.extra["MOW_SCHEDULE"] = redact_private(schedule)
+        self.async_update_listeners()
 
     async def async_set_user_mode(self, part: str, **changes: Any) -> None:
         """Change a setting on the mower and show the settings it now reports."""

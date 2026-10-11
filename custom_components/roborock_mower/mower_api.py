@@ -110,6 +110,10 @@ TYPE_APP_BUTTON = "APP_BUTTON"
 TYPE_REMOTE_CMD = "REMOTE_CMD"
 TYPE_SET_MOW_PREFERENCE = "SET_MOW_PREFERENCE"
 TYPE_GET_USER_MODE_CONFIG = "GET_USER_MODE_CONFIG"
+# Mowing plans (the app's schedules): read all, change one.
+TYPE_GET_MOW_SCHEDULE = "GET_MOW_SCHEDULE"
+TYPE_CHANGE_MOWING_PLAN = "CHANGE_MOWING_PLAN"
+PLAN_OPEN, PLAN_CLOSED = "OPEN", "CLOSE"
 # The parts of the settings (GET_USER_MODE_CONFIG) and the command that writes
 # each one; the RemoteMsg field has the part's name (both from the app plugin).
 USER_MODE_COMMANDS = {
@@ -513,6 +517,25 @@ class MowerCommandRejected(RoborockException):
 
 class MowerSettingNotApplied(RoborockException):
     """The mower accepted a setting but still reports the old value."""
+
+
+def mow_plans(schedule: dict[str, Any] | None) -> list[dict[str, Any]] | None:
+    """The plans of a ``GET_MOW_SCHEDULE`` answer (None if it holds none)."""
+    if not isinstance(schedule, dict):
+        return None
+    content = schedule.get("mow_schedule")
+    if not isinstance(content, dict):
+        return None
+    # No plans at all: the list is left out.
+    plans = content.get("plans") or []
+    return [plan for plan in plans if isinstance(plan, dict) and plan.get("id") is not None]
+
+
+def find_plan(schedule: dict[str, Any] | None, plan_id: Any) -> dict[str, Any] | None:
+    return next(
+        (plan for plan in mow_plans(schedule) or [] if str(plan["id"]) == str(plan_id)),
+        None,
+    )
 
 
 def _proto_value(value: Any) -> Any:
@@ -932,6 +955,27 @@ class MowerApi:
             for key, value in changes.items()
         ):
             raise MowerSettingNotApplied(f"The mower kept its {part}")
+        return after
+
+    async def set_plan_open(self, plan_id: Any, open_: bool) -> dict[str, Any]:
+        """Switch a mowing plan on (``OPEN``) or off (``CLOSE``), like the app.
+
+        The plan is read and sent back whole with the new ``status``
+        (``CHANGE_MOWING_PLAN`` with ``mowing_plan``), then the plans are read
+        again to confirm. Returns the new ``GET_MOW_SCHEDULE`` answer.
+        """
+        status = PLAN_OPEN if open_ else PLAN_CLOSED
+        before = await self.get_info(TYPE_GET_MOW_SCHEDULE, record=False)
+        plan = find_plan(before, plan_id)
+        if plan is None:
+            raise RoborockException(f"Mowing plan {plan_id} not found on the mower")
+        await self._send_remote_msg(
+            {"type": TYPE_CHANGE_MOWING_PLAN, "mowing_plan": {**plan, "status": status}}
+        )
+        after = await self.get_info(TYPE_GET_MOW_SCHEDULE, record=False)
+        changed = find_plan(after, plan_id)
+        if changed is None or changed.get("status") != status:
+            raise MowerSettingNotApplied(f"The mower kept mowing plan {plan_id}")
         return after
 
     async def set_mow_eff_mode(self, mode: int) -> Any:

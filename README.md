@@ -62,6 +62,10 @@ Was sich in welcher Version geändert hat, steht in den
   „Benutzerdefiniert“ (5°-Schritte), Schnitthöhe (wo das Modell sie hat). Zonen,
   die in der App eigene Einstellungen haben, stehen als Attribut dabei – für sie
   gelten die globalen Einstellungen nicht
+- **Mähpläne** – ein Schalter pro Plan aus der App, benannt nach Zeit und Tagen
+  (z. B. „Mähplan 08:00–10:35 (Mo–Sa)“): an = Plan aktiv, aus = pausiert. Neue
+  Pläne bekommen automatisch einen Schalter, gelöschte verlieren ihn. Ideal für
+  Automationen, z. B. bei Regen die Pläne des Tages ausschalten
 - **Zone mähen: …** (eine Taste pro gespeicherter Zone) – startet das Zonenmähen
 - **Routinen** aus der Roborock-App erscheinen als Tasten
 - **Aktionen** `roborock_mower.mow_areas` (Zonen mähen),
@@ -241,6 +245,10 @@ What changed in which version is listed in the
   change per mow (15/30/60/90°), angle for "Custom" (5° steps), cutting height
   (where the model has it). Zones with their own settings in the app are listed
   as an attribute – the global settings don't apply to them
+- **Mowing plans** – one switch per plan of the app, named after its time and
+  days (e.g. "Mowing plan 08:00–10:35 (Mon–Sat)"): on = active, off = paused. New
+  plans get a switch automatically, deleted ones lose it. Handy for automations,
+  e.g. switching the day's plans off when it rains
 - **Mow zone: …** – one button per saved area starts a zone mow
 - **Routines** from the Roborock app appear as buttons
 - **Actions** `roborock_mower.mow_areas`, `roborock_mower.list_areas`,
