@@ -49,9 +49,10 @@ Was sich in welcher Version geändert hat, steht in den
   **Diagnose** vorhanden, aber standardmäßig deaktiviert. Der Mäher wird dafür
   selbst gefragt (lokal oder über MQTT, nicht über die begrenzte Cloud-Schnittstelle):
   jede Minute beim Mähen, sonst alle 30 Minuten und sofort nach einer Statusänderung.
-- **Karte** (Bild-Entität) – Rasenzonen mit Namen und Fläche, Ladestation, Position
-  des Mähers mit Fahrtrichtung und die Fahrspur der aktuellen bzw. letzten Mähfahrt;
-  beim Mähen alle paar Sekunden aktualisiert
+- **Karte** (Bild-Entität) im Stil der App – Rasenzonen mit Namen, Ladestation mit
+  Stellplatz, der Mäher in Fahrtrichtung und die Fahrspur der aktuellen bzw. letzten
+  Mähfahrt; beim Mähen alle paar Sekunden aktualisiert, Ebenen über das Zahnrad
+  der Integration wählbar
 - **Einstellungen ändern** – Mäheffizienz (Standard / Effizient / Feinschnitt),
   Mähdurchgänge, Kantenschnitt beim Mähen (Schalter), Richtungsmodus (Auto / Optimal /
   Benutzerdefiniert), Richtungsänderung je Mähvorgang (15/30/60/90°), Winkel für
@@ -145,14 +146,21 @@ Daten über das Issue-Formular **„Mäher-Daten teilen“** beisteuern.
 
 ## Karte
 
-Die Entität **Karte** (`image.<mäher>_karte`) zeigt die Karte wie die App:
-Rasenzonen mit Namen und Fläche, die Ladestation, den Mäher mit Fahrtrichtung
-und seine Fahrspur. Die Karte holt die Integration beim Start und immer dann,
-wenn der Mäher eine geänderte Karte meldet (über die Cloud, wie die App). Die
-Position kommt beim Mähen alle paar Sekunden; das Bild wird höchstens alle
-10 Sekunden neu gezeichnet. Im Dashboard z. B. mit einer **Bild**- oder
-**Bild-Entität**-Karte anzeigen. Die Fahrspur beginnt mit jeder neuen
-Mähfahrt neu und geht bei einem Neustart von Home Assistant verloren.
+Die Entität **Karte** (`image.<mäher>_karte`) zeigt die Karte im Stil der App:
+dunkelgrüner Rasen mit Zonennamen, der helle Stellplatz der Ladestation, der
+Mäher von oben in Fahrtrichtung und seine Fahrspur als weiße Linien. Die Karte holt die Integration beim
+Start und immer dann, wenn der Mäher eine geänderte Karte meldet (über die
+Cloud, wie die App). Die Position kommt beim Mähen alle paar Sekunden; das Bild
+wird höchstens alle 10 Sekunden neu gezeichnet. Im Dashboard z. B. mit einer
+**Bild**- oder **Bild-Entität**-Karte anzeigen. Die Fahrspur zeigt die
+aktuelle bzw. letzte Mähfahrt, beginnt mit jeder neuen Fahrt neu und bleibt
+auch nach einem Neustart von Home Assistant erhalten.
+
+**Was die Karte zeigt**, stellst du wie bei der offiziellen Roborock-Integration
+ein: Geräte & Dienste → **Roborock Mower** → **Zahnrad (Konfigurieren)** →
+Fahrspur, Zonennamen, Ladestation mit Stellplatz, Mäher, Raster (1 m) mit
+Maßstab. Änderungen
+gelten sofort, ohne Neustart.
 
 Die Karte zeigt deinen Garten. Sie bleibt in Home Assistant; die Diagnose
 enthält nur Zonennamen und Flächen, keine Koordinaten. Aufbau der Kartendaten:
@@ -218,9 +226,10 @@ What changed in which version is listed in the
   They are asked from the mower itself (locally or via MQTT, never the
   rate-limited cloud API): every minute while mowing, otherwise every 30 minutes
   and right after a state change.
-- **Map** (image entity) – lawn zones with name and area, charging station, the
-  mower's position and heading, and the track of the current or last run;
-  updated every few seconds while mowing
+- **Map** (image entity) in the style of the app – lawn zones with names, charging
+  station with its place, the mower turned where it heads, and the track of the
+  current or last run; updated every few seconds while mowing, layers chosen with
+  the integration's gear
 - **Change settings** – mowing efficiency (Standard / Efficient / Manicure),
   mowing passes, edge cut while mowing (switch), direction mode (Auto / Optimal / Custom), direction
   change per mow (15/30/60/90°), angle for "Custom" (5° steps), cutting height
@@ -309,13 +318,19 @@ form.
 
 ## Map
 
-The **Map** entity (`image.<mower>_map`) shows the map like the app: lawn zones
-with name and area, the charging station, the mower with its heading and its
-track. The integration reads the map at start and whenever the mower reports a
-changed map (through the cloud, like the app). While mowing the position comes
-every few seconds; the picture is redrawn at most every 10 seconds. Show it on
-a dashboard with e.g. a **Picture** or **Picture entity** card. The track starts
-anew with every run and is lost when Home Assistant restarts.
+The **Map** entity (`image.<mower>_map`) shows the map in the style of the app:
+dark green lawn with zone names, the light place of the charging station, the
+mower from above turned where it heads, and its track as white lines. The integration reads the map at start and whenever
+the mower reports a changed map (through the cloud, like the app). While mowing
+the position comes every few seconds; the picture is redrawn at most every 10
+seconds. Show it on a dashboard with e.g. a **Picture** or **Picture entity**
+card. The track shows the current or last run, starts anew with every run and
+is kept when Home Assistant restarts.
+
+**What the map shows** is set like in the official Roborock integration:
+Devices & services → **Roborock Mower** → **gear (Configure)** → track, zone
+names, charging station with its place, mower, grid (1 m) with scale. Changes apply right
+away, without a restart.
 
 The map shows your garden. It stays in Home Assistant; the diagnostics only hold
 zone names and areas, no coordinates. Map data layout:

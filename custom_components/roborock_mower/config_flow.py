@@ -12,10 +12,13 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    OptionsFlow,
 )
 from homeassistant.const import CONF_USERNAME
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -29,6 +32,7 @@ from .const import (
     DOMAIN,
     REGION_OPTIONS,
 )
+from .map_data import DEFAULT_MAP_LAYERS, MAP_LAYERS, map_layer_option
 from .vendor.roborock.exceptions import (
     RoborockAccountDoesNotExist,
     RoborockException,
@@ -57,6 +61,12 @@ class RoborockMowerFlowHandler(ConfigFlow, domain=DOMAIN):
         self._username: str | None = None
         self._base_url: str | None = None
         self._client: RoborockApiClient | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """The gear on the integration: what the map shows."""
+        return RoborockMowerOptionsFlow()
 
     def _official_logins(self) -> list[ConfigEntry]:
         """Logins of the official Roborock integration that can be reused.
@@ -267,4 +277,32 @@ class RoborockMowerFlowHandler(ConfigFlow, domain=DOMAIN):
             step_id="code",
             data_schema=vol.Schema({vol.Required(CONF_ENTRY_CODE): str}),
             errors=errors,
+        )
+
+
+class RoborockMowerOptionsFlow(OptionsFlow):
+    """Map options, like the official Roborock integration's map drawables.
+
+    Applied right away, without restarting the integration.
+    """
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data={**self.config_entry.options, **user_input})
+        options = self.config_entry.options
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        map_layer_option(layer),
+                        default=options.get(
+                            map_layer_option(layer), DEFAULT_MAP_LAYERS[layer]
+                        ),
+                    ): BooleanSelector()
+                    for layer in MAP_LAYERS
+                }
+            ),
         )

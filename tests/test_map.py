@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 from datetime import timedelta
 import json
+import time
+from typing import Any
 from types import SimpleNamespace
 from xml.etree import ElementTree
 
 import pytest
 
 from homeassistant.components.image import async_get_image
+from homeassistant.const import EVENT_HOMEASSISTANT_FINAL_WRITE
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.util import dt as dt_util
 
 from custom_components.roborock_mower.map_data import (
+    DEFAULT_MAP_LAYERS,
     MapView,
     MapZone,
     MowerMap,
@@ -35,7 +41,9 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from .conftest import FakeChannel, FakeMessage
+from custom_components.roborock_mower.const import DOMAIN
+
+from .conftest import MOWER_DUID, FakeChannel, FakeMessage
 from .protobuf import LAWN, MAP, STREAM_FRAME, stream_frame, sub, text
 from .test_robot_status import LIVE_STATUS, _answering, _entity_id, _setup, _wait_until
 
@@ -116,11 +124,36 @@ def test_the_map_is_drawn() -> None:
     assert root.get("viewBox") == "0 0 12.000 10.000"
     assert root.get("width") == "480"
     tags = [child.tag.rsplit("}", 1)[-1] for child in root]
-    assert tags == ["polygon", "polyline", "text", "rect", "circle", "line"]
-    assert "Wiese &lt;hinten&gt; · 80 m²" in svg
+    # Lawn, station place, track, zone name, station and mower.
+    assert tags == ["polygon", "rect", "polyline", "text", "g", "g"]
+    assert ">Wiese &lt;hinten&gt;</text>" in svg
+    # The mower is turned to where it heads (yaw 0: east, not turned).
+    assert root[5].get("transform") == "translate(5.500 4.500) rotate(-0.0)"
     # North up: y = 8 m (top of the lawn) is near the top of the picture.
     polygon = root[0].get("points").split()
     assert polygon[2] == "10.500,0.500"
+
+
+def test_map_layers_can_be_switched() -> None:
+    mower_map = parse_map(MAP)
+    track = [(1.0, 1.0), (5.0, 4.0)]
+    nothing = dict.fromkeys(DEFAULT_MAP_LAYERS, False)
+    root = ElementTree.fromstring(
+        render_svg(MapView(mower_map, Pose(5.0, 4.0, 0.0), track, nothing))
+    )
+    # Only the lawn is left.
+    assert [child.tag.rsplit("}", 1)[-1] for child in root] == ["polygon"]
+
+    svg = render_svg(
+        MapView(mower_map, None, [], {**DEFAULT_MAP_LAYERS, "grid": True})
+    ).decode()
+    # Grid lines every metre and a 5 m scale bar (the map is 12 m wide);
+    # the mower drawn where the map file saw it, the station next to it.
+    assert "5 m</text>" in svg
+    assert svg.count("<g ") == 2
+    # On the station the mower hides it.
+    docked = MapView(mower_map, Pose(0.5, 0.5, -1.0), [])
+    assert render_svg(docked).decode().count("<g ") == 1
 
 
 def test_drawing_without_map_size() -> None:
@@ -147,7 +180,10 @@ def _map_channel(answers: list[bytes | Exception], calls: list[str]):
 
 
 async def test_map_image_follows_the_mower(
-    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    channel: FakeChannel,
+    hass_storage: dict[str, Any],
 ) -> None:
     status = copy.deepcopy(LIVE_STATUS)
     channel.rpc_channel.send_command.side_effect = _answering([], status)
@@ -182,6 +218,13 @@ async def test_map_image_follows_the_mower(
     await _wait_until(hass, lambda: hass.states.get(image).attributes["track_points"] == 2)
     picture = await async_get_image(hass, image)
     assert b"<polyline" in picture.content
+    # Kept for a restart: the map and the track (written within a minute,
+    # and at the latest when Home Assistant stops).
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_FINAL_WRITE)
+    await hass.async_block_till_done()
+    saved = hass_storage[f"{DOMAIN}.{config_entry.entry_id}.map"]["data"][MOWER_DUID]
+    assert saved["track"] == [[3.5, -2.25], [5.0, -2.25]]
+    assert base64.b64decode(saved["map"]) == MAP
 
     # The same map file: not read again; a changed one: read again.
     await coordinator.async_refresh_robot_status()
@@ -217,4 +260,91 @@ async def test_map_retried_after_a_while(
     await coordinator.async_refresh_robot_status()
     assert coordinator.mower_map is not None
     await _wait_until(hass, lambda: hass.states.get(image).state != "unavailable")
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_map_and_track_survive_a_restart(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    channel: FakeChannel,
+    hass_storage: dict[str, Any],
+) -> None:
+    """After a restart the map and the last run's track are there at once."""
+    hass_storage[f"{DOMAIN}.{config_entry.entry_id}.map"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": f"{DOMAIN}.{config_entry.entry_id}.map",
+        "data": {
+            MOWER_DUID: {
+                "map": base64.b64encode(MAP).decode(),
+                "map_version": LIVE_STATUS["map_abstracts"][0]["file_change_time"],
+                "track": [[1.0, 1.0], [2.0, 2.0], "junk"],
+                "track_time": time.time() - 3600,
+            }
+        },
+    }
+    channel.rpc_channel.send_command.side_effect = _answering([])
+    map_calls: list[str] = []
+    channel.map_rpc_channel.send_command.side_effect = _map_channel(
+        [RoborockException("Command timed out after 10.0s")], map_calls
+    )
+    await _setup(hass, config_entry)
+    coordinator = config_entry.runtime_data.coordinators[0]
+    await _wait_until(hass, lambda: coordinator.robot_status is not None)
+    assert coordinator.track == [(1.0, 1.0), (2.0, 2.0)]
+    image = _entity_id(hass, "image", "map")
+    assert hass.states.get(image).state != "unavailable"
+    assert hass.states.get(image).attributes["track_points"] == 2
+    # The kept map is still the mower's current one: not asked again.
+    assert map_calls == []
+    picture = await async_get_image(hass, image)
+    assert b"<polyline" in picture.content
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_map_options(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """The gear on the integration chooses what the map shows, right away."""
+    config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(config_entry, options={"map_grid": True})
+    channel.rpc_channel.send_command.side_effect = _answering([])
+    channel.map_rpc_channel.send_command.side_effect = _map_channel([MAP], [])
+    await _setup(hass, config_entry)
+    coordinator = config_entry.runtime_data.coordinators[0]
+    await _wait_until(hass, lambda: coordinator.mower_map is not None)
+    image = _entity_id(hass, "image", "map")
+    # The grid with its scale bar, as set.
+    assert b" m</text>" in (await async_get_image(hass, image)).content
+
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert [str(key) for key in result["data_schema"].schema] == [
+        "map_track",
+        "map_labels",
+        "map_dock",
+        "map_mower",
+        "map_grid",
+    ]
+    before = hass.states.get(image).state
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "map_track": True,
+            "map_labels": False,
+            "map_dock": True,
+            "map_mower": True,
+            "map_grid": True,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    # Applied without restarting the integration, and drawn at once.
+    assert config_entry.runtime_data.coordinators[0] is coordinator
+    assert coordinator.map_layers["labels"] is False
+    assert hass.states.get(image).state != before
+    picture = (await async_get_image(hass, image)).content
+    assert b"Wiese" not in picture
+    assert b" m</text>" in picture
+    assert hass.states.get(image).attributes["layers"] == ["track", "dock", "mower", "grid"]
     assert await hass.config_entries.async_unload(config_entry.entry_id)
