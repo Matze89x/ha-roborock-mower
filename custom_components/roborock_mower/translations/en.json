@@ -53,6 +53,21 @@
       "wrong_account": "This verification code belongs to a different Roborock account"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Map options",
+        "description": "What the map picture shows. Changes apply right away.",
+        "data": {
+          "map_track": "Track of the current or last run (mowed strip)",
+          "map_labels": "Zone names and area",
+          "map_dock": "Charging station",
+          "map_mower": "Mower with heading",
+          "map_grid": "Grid (1 m) and scale"
+        }
+      }
+    }
+  },
   "selector": {
     "region": {
       "options": {

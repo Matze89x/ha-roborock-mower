@@ -1,8 +1,9 @@
 """Image platform for the Roborock mower: the map, drawn like in the app.
 
 The map (``get_map_diff``) shows the zones' boundaries, their names and the
-charging station; the mower's position and the track of its run follow
-while it mows. Drawn as SVG, so it stays sharp at any size.
+charging station; the mower's position and the track of its run (as the
+mowed strip) follow while it mows. The integration's options (the gear)
+choose what is shown. Drawn as SVG, so it stays sharp at any size.
 """
 
 from __future__ import annotations
@@ -56,10 +57,15 @@ class RoborockMowerMapImage(RoborockMowerEntity, ImageEntity):
         mower_map = self.coordinator.mower_map
         if mower_map is None:
             return None
+        track_time = self.coordinator.track_time
         return {
             "zones": [zone.name for zone in mower_map.zones if zone.name],
             "map_changed": mower_map.changed,
             "track_points": len(self.coordinator.track),
+            "track_updated": (
+                dt_util.utc_from_timestamp(track_time).isoformat() if track_time else None
+            ),
+            "layers": [layer for layer, shown in self.coordinator.map_layers.items() if shown],
         }
 
     async def async_added_to_hass(self) -> None:
@@ -76,8 +82,12 @@ class RoborockMowerMapImage(RoborockMowerEntity, ImageEntity):
             self._redraw_later = None
 
     @callback
-    def _map_changed(self) -> None:
-        """The map or the position changed: show it, at most every 10 seconds."""
+    def _map_changed(self, immediate: bool) -> None:
+        """Show what changed: a new map or layer now, positions at most every 10 s."""
+        if immediate:
+            self._cancel_redraw()
+            self._redraw()
+            return
         if self._redraw_later is not None:
             return
         now = dt_util.utcnow()

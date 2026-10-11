@@ -34,6 +34,7 @@ from __future__ import annotations
 import base64
 import math
 import struct
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from html import escape
 from typing import Any
@@ -355,11 +356,40 @@ _PIXELS_PER_METRE = 40
 _COLORS = {
     "lawn": "#7cc36b",
     "lawn_edge": "#2e7d32",
+    "mowed": "#3f8f35",
     "track": "#ffffff",
+    "grid": "#1b3d1b",
     "dock": "#1e88e5",
     "mower": "#ff7043",
     "label": "#1b3d1b",
 }
+# What can be shown, and what is shown unless switched otherwise.
+MAP_LAYERS = ("track", "labels", "dock", "mower", "grid")
+DEFAULT_MAP_LAYERS: dict[str, bool] = {
+    "track": True,
+    "labels": True,
+    "dock": True,
+    "mower": True,
+    "grid": False,
+}
+
+
+def map_layer_option(layer: str) -> str:
+    """The config entry option that shows or hides a layer (``map_track`` ...)."""
+    return f"map_{layer}"
+
+
+def map_layers_from_options(options: Mapping[str, Any]) -> dict[str, bool]:
+    """Which layers to show, from the integration's options."""
+    return {
+        layer: bool(options.get(map_layer_option(layer), shown))
+        for layer, shown in DEFAULT_MAP_LAYERS.items()
+    }
+
+
+# Width of the mowed strip drawn along the track when the model's blade disc
+# is unknown (RockNeo Q105: 220 mm).
+DEFAULT_CUT_WIDTH = 0.22
 
 
 @dataclass(slots=True)
@@ -369,6 +399,11 @@ class MapView:
     map: MowerMap
     robot: Pose | None = None
     track: list[tuple[float, float]] = field(default_factory=list)
+    layers: dict[str, bool] = field(default_factory=lambda: dict(DEFAULT_MAP_LAYERS))
+    cut_width: float = DEFAULT_CUT_WIDTH
+
+    def shows(self, layer: str) -> bool:
+        return self.layers.get(layer, DEFAULT_MAP_LAYERS.get(layer, False))
 
 
 def _bounds(view: MapView) -> tuple[float, float, float, float]:
@@ -417,78 +452,156 @@ def _centroid(points: tuple[tuple[float, float], ...]) -> tuple[float, float]:
     return cx / (3 * area), cy / (3 * area)
 
 
-def render_svg(view: MapView) -> bytes:
-    """The map as an SVG image: lawn, zone names, track, station and mower.
+def _scale_length(width: float) -> int:
+    """A round length for the scale bar, about a fifth of the map's width."""
+    for length in (1, 2, 5, 10, 20, 50, 100):
+        if length >= width / 5:
+            return length
+    return 200
 
-    North of the map frame (growing y) is up, as in the app.
+
+def render_svg(view: MapView) -> bytes:
+    """The map as an SVG image, the layers the view asks for.
+
+    Lawn zones always; the mowed track, zone names with area, the charging
+    station, the mower with its heading and a 1-metre grid with a scale bar
+    as switched. North of the map frame (growing y) is up, as in the app.
     """
     min_x, min_y, max_x, max_y = _bounds(view)
     width, height = max_x - min_x, max_y - min_y
-    scale = _PIXELS_PER_METRE
+    unit = max(width, height) / 60  # symbol sizes follow the map size
 
-    def pt(x: float, y: float) -> str:
-        return f"{(x - min_x):.3f},{(max_y - y):.3f}"
+    def x_of(x: float) -> float:
+        return x - min_x
+
+    def y_of(y: float) -> float:
+        return max_y - y
 
     def path(points: list[tuple[float, float]] | tuple[tuple[float, float], ...]) -> str:
-        return " ".join(pt(x, y) for x, y in points)
+        return " ".join(f"{x_of(x):.3f},{y_of(y):.3f}" for x, y in points)
 
-    unit = max(width, height) / 60  # line widths and sizes follow the map size
     parts = [
         (
             '<svg xmlns="http://www.w3.org/2000/svg" '
             f'viewBox="0 0 {width:.3f} {height:.3f}" '
-            f'width="{round(width * scale)}" height="{round(height * scale)}">'
+            f'width="{round(width * _PIXELS_PER_METRE)}" '
+            f'height="{round(height * _PIXELS_PER_METRE)}">'
         )
     ]
-    for zone in view.map.zones:
+    zones = view.map.zones
+    for zone in zones:
         parts.append(
             f'<polygon points="{path(zone.points)}" fill="{_COLORS["lawn"]}" '
             f'stroke="{_COLORS["lawn_edge"]}" stroke-width="{unit * 0.35:.3f}" '
             'stroke-linejoin="round"/>'
         )
-    if len(view.track) > 1:
+    if view.shows("grid"):
+        parts.extend(_grid(min_x, min_y, max_x, max_y, unit))
+    if view.shows("track") and len(view.track) > 1:
+        points = path(view.track)
+        # The mowed strip (as wide as the blade disc), then the line driven.
         parts.append(
-            f'<polyline points="{path(view.track)}" fill="none" '
-            f'stroke="{_COLORS["track"]}" stroke-opacity="0.75" '
-            f'stroke-width="{unit * 0.3:.3f}" stroke-linecap="round" '
-            'stroke-linejoin="round"/>'
+            f'<polyline points="{points}" fill="none" stroke="{_COLORS["mowed"]}" '
+            f'stroke-opacity="0.55" stroke-width="{max(view.cut_width, unit * 0.3):.3f}" '
+            'stroke-linecap="round" stroke-linejoin="round"/>'
         )
-    for zone in view.map.zones:
-        if not zone.name:
-            continue
-        cx, cy = _centroid(zone.points)
-        label = escape(zone.name)
-        if zone.area is not None:
-            label += f" · {zone.area:.0f} m²"
         parts.append(
-            f'<text x="{cx - min_x:.3f}" y="{max_y - cy:.3f}" '
-            f'font-size="{unit * 1.6:.3f}" font-family="sans-serif" '
-            f'text-anchor="middle" dominant-baseline="middle" '
-            f'fill="{_COLORS["label"]}" stroke="#ffffff" '
-            f'stroke-width="{unit * 0.25:.3f}" paint-order="stroke">{label}</text>'
+            f'<polyline points="{points}" fill="none" stroke="{_COLORS["track"]}" '
+            f'stroke-opacity="0.5" stroke-width="{unit * 0.1:.3f}" '
+            'stroke-linecap="round" stroke-linejoin="round"/>'
         )
-    if (dock := view.map.dock) is not None:
-        size = unit * 1.2
-        parts.append(
-            f'<rect x="{dock.x - min_x - size / 2:.3f}" y="{max_y - dock.y - size / 2:.3f}" '
-            f'width="{size:.3f}" height="{size:.3f}" rx="{size * 0.2:.3f}" '
-            f'fill="{_COLORS["dock"]}" stroke="#ffffff" stroke-width="{unit * 0.15:.3f}"/>'
-        )
-    if (robot := view.robot or view.map.robot) is not None:
-        radius = unit * 0.8
-        x, y = robot.x - min_x, max_y - robot.y
-        parts.append(
-            f'<circle cx="{x:.3f}" cy="{y:.3f}" r="{radius:.3f}" '
-            f'fill="{_COLORS["mower"]}" stroke="#ffffff" stroke-width="{unit * 0.15:.3f}"/>'
-        )
-        if robot.yaw is not None:
-            # Heading line; the image's y axis points down.
-            hx = x + math.cos(robot.yaw) * radius * 1.8
-            hy = y - math.sin(robot.yaw) * radius * 1.8
+    if view.shows("labels"):
+        for zone in zones:
+            if not zone.name:
+                continue
+            cx, cy = _centroid(zone.points)
+            label = escape(zone.name)
+            if zone.area is not None:
+                label += f" · {zone.area:.0f} m²"
             parts.append(
-                f'<line x1="{x:.3f}" y1="{y:.3f}" x2="{hx:.3f}" y2="{hy:.3f}" '
-                f'stroke="{_COLORS["mower"]}" stroke-width="{unit * 0.3:.3f}" '
-                'stroke-linecap="round"/>'
+                f'<text x="{x_of(cx):.3f}" y="{y_of(cy):.3f}" '
+                f'font-size="{unit * 1.6:.3f}" font-family="sans-serif" '
+                'text-anchor="middle" dominant-baseline="middle" '
+                f'fill="{_COLORS["label"]}" stroke="#ffffff" '
+                f'stroke-width="{unit * 0.25:.3f}" paint-order="stroke">{label}</text>'
             )
+    if view.shows("dock") and (dock := view.map.dock) is not None:
+        parts.append(_house(x_of(dock.x), y_of(dock.y), unit * 1.7, unit))
+    if view.shows("mower") and (robot := view.robot or view.map.robot) is not None:
+        parts.extend(_mower(x_of(robot.x), y_of(robot.y), robot.yaw, unit))
     parts.append("</svg>")
     return "".join(parts).encode()
+
+
+def _grid(
+    min_x: float, min_y: float, max_x: float, max_y: float, unit: float
+) -> list[str]:
+    """Lines every metre (every fifth stronger) and a scale bar."""
+    width, height = max_x - min_x, max_y - min_y
+    lines = []
+    for metre in range(math.ceil(min_x), math.floor(max_x) + 1):
+        lines.append((metre, f"M{metre - min_x:.3f} 0V{height:.3f}"))
+    for metre in range(math.ceil(min_y), math.floor(max_y) + 1):
+        lines.append((metre, f"M0 {max_y - metre:.3f}H{width:.3f}"))
+    thin = "".join(step for metre, step in lines if metre % 5)
+    strong = "".join(step for metre, step in lines if not metre % 5)
+    parts = [
+        f'<path d="{thin}" stroke="{_COLORS["grid"]}" stroke-opacity="0.12" '
+        f'stroke-width="{unit * 0.06:.3f}"/>',
+        f'<path d="{strong}" stroke="{_COLORS["grid"]}" stroke-opacity="0.25" '
+        f'stroke-width="{unit * 0.1:.3f}"/>',
+    ]
+    length = _scale_length(width)
+    x0, y0 = unit * 1.5, height - unit * 1.5
+    bar = f"M{x0:.3f} {y0 - unit * 0.5:.3f}V{y0:.3f}H{x0 + length:.3f}V{y0 - unit * 0.5:.3f}"
+    # A white halo keeps the bar readable on dark dashboards.
+    parts.append(
+        f'<path d="{bar}" fill="none" stroke="#ffffff" stroke-width="{unit * 0.45:.3f}"/>'
+    )
+    parts.append(
+        f'<path d="{bar}" fill="none" stroke="{_COLORS["label"]}" '
+        f'stroke-width="{unit * 0.2:.3f}"/>'
+    )
+    parts.append(
+        f'<text x="{x0 + length / 2:.3f}" y="{y0 - unit * 0.7:.3f}" '
+        f'font-size="{unit * 1.2:.3f}" font-family="sans-serif" text-anchor="middle" '
+        f'fill="{_COLORS["label"]}" stroke="#ffffff" stroke-width="{unit * 0.2:.3f}" '
+        f'paint-order="stroke">{length} m</text>'
+    )
+    return parts
+
+
+def _house(x: float, y: float, size: float, unit: float) -> str:
+    """The charging station: a small house."""
+    half = size / 2
+    outline = (
+        f"M{x - half:.3f} {y + half:.3f}V{y - half * 0.1:.3f}L{x:.3f} {y - half:.3f}"
+        f"L{x + half:.3f} {y - half * 0.1:.3f}V{y + half:.3f}Z"
+    )
+    return (
+        f'<path d="{outline}" fill="{_COLORS["dock"]}" stroke="#ffffff" '
+        f'stroke-width="{unit * 0.18:.3f}" stroke-linejoin="round"/>'
+    )
+
+
+def _mower(x: float, y: float, yaw: float | None, unit: float) -> list[str]:
+    """The mower: a disc with an arrow pointing where it drives."""
+    radius = unit * 1.1
+    parts = [
+        f'<circle cx="{x:.3f}" cy="{y:.3f}" r="{radius:.3f}" fill="{_COLORS["mower"]}" '
+        f'stroke="#ffffff" stroke-width="{unit * 0.18:.3f}"/>'
+    ]
+    if yaw is not None:
+        # The image's y axis points down, so the angle turns the other way.
+        def at(angle: float, distance: float) -> str:
+            return (
+                f"{x + math.cos(yaw + angle) * distance:.3f},"
+                f"{y - math.sin(yaw + angle) * distance:.3f}"
+            )
+
+        arrow = " ".join(
+            (at(0, radius * 0.7), at(2.4, radius * 0.6), at(math.pi, radius * 0.2),
+             at(-2.4, radius * 0.6))
+        )
+        parts.append(f'<polygon points="{arrow}" fill="#ffffff"/>')
+    return parts

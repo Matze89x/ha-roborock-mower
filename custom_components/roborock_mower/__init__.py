@@ -59,7 +59,12 @@ from .const import (
 from .app_plugin import async_find_query_names, async_find_strings
 from .coordinator import MowerConfigEntry, MowerRuntimeData, RoborockMowerCoordinator
 from .home_data import SOURCE_CLOUD, HomeDataProvider
-from .map_data import PROTOCOL_STATUS_STREAM, pose_from_stream, readable_frame
+from .map_data import (
+    PROTOCOL_STATUS_STREAM,
+    map_layers_from_options,
+    pose_from_stream,
+    readable_frame,
+)
 from .mower_api import (
     MAP_RPC_METHODS,
     MowerApi,
@@ -74,7 +79,7 @@ from .robot_status import (
     redact_private,
     shorten_long_strings,
 )
-from .storage import MowerCacheStore
+from .storage import MowerCacheStore, MowerMapStore
 from .vendor.roborock.data import HomeData, UserData
 from .vendor.roborock.devices.cache import DeviceCache
 from .vendor.roborock.devices.rpc.v1_channel import create_v1_channel
@@ -630,6 +635,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
         # Persist the mowers' network info learned during this run.
         await cache.async_flush()
 
+    map_store = MowerMapStore(hass, entry.entry_id)
+    await map_store.async_load()
     try:
         for device, product in mower_devices:
             channel = create_v1_channel(
@@ -651,7 +658,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
                 mower_api,
                 home_data_provider,
                 stale=not fresh,
+                map_store=map_store,
             )
+            coordinator.restore_map()
             runtime.unsubscribes.append(
                 await channel.subscribe(
                     _make_push_handler(coordinator, mower_api, device.duid)
@@ -680,6 +689,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
 
     entry.runtime_data = runtime
     _remove_retired_entities(hass, runtime)
+
+    async def _options_changed(hass: HomeAssistant, entry: MowerConfigEntry) -> None:
+        # Map options apply right away; nothing to restart.
+        layers = map_layers_from_options(entry.options)
+        for coordinator in entry.runtime_data.coordinators:
+            coordinator.set_map_layers(layers)
+
+    entry.async_on_unload(entry.add_update_listener(_options_changed))
 
     stop_fired = False
 
@@ -746,5 +763,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> bo
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> None:
-    """Delete the persistent cache when the config entry is removed."""
+    """Delete the persistent cache, the map and the track with the entry."""
     await MowerCacheStore(hass, entry.entry_id).async_remove()
+    await MowerMapStore(hass, entry.entry_id).async_remove()

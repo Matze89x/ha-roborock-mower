@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import logging
 import time
 from collections.abc import Callable, Coroutine
@@ -34,7 +36,15 @@ from .const import (
     UPDATE_INTERVAL,
 )
 from .home_data import HomeDataProvider
-from .map_data import MapView, MowerMap, Pose, parse_map, pose_from_status
+from .map_data import (
+    DEFAULT_CUT_WIDTH,
+    MapView,
+    MowerMap,
+    Pose,
+    map_layers_from_options,
+    parse_map,
+    pose_from_status,
+)
 from .mower_api import (
     ACTIVITY_MOWING,
     ACTIVITY_PAUSED,
@@ -51,8 +61,8 @@ from .mower_api import (
     derive_activity,
     redact_dps,
 )
-from .robot_status import dig, redact_private
-from .storage import MowerCacheStore
+from .robot_status import as_number, dig, redact_private
+from .storage import MowerCacheStore, MowerMapStore
 from .vendor.roborock.data import HomeDataDevice, HomeDataProduct, UserData
 from .vendor.roborock.exceptions import RoborockException, RoborockInvalidCredentials
 from .vendor.roborock.mqtt.session import MqttSession
@@ -125,6 +135,7 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         mower_api: MowerApi,
         home_data: HomeDataProvider,
         stale: bool = False,
+        map_store: MowerMapStore | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -156,11 +167,15 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self.mower_map: MowerMap | None = None
         self.robot_pose: Pose | None = None
         self.track: list[tuple[float, float]] = []
-        self._track_moved_at: float | None = None
+        # Wall-clock time (epoch seconds) of the last track point.
+        self.track_time: float | None = None
+        # What the map picture shows (the integration's options).
+        self.map_layers: dict[str, bool] = map_layers_from_options(entry.options)
+        self._map_store = map_store
         self._map_tried_at: float | None = None
         self._map_version: Any = None
         self._map_failing = False
-        self._map_listeners: list[Callable[[], None]] = []
+        self._map_listeners: list[Callable[[bool], None]] = []
 
     async def _async_update_data(self) -> MowerStatus:
         api = self.mower_api
@@ -361,11 +376,31 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         """The map with the latest position and track, once the map is read."""
         if self.mower_map is None:
             return None
-        return MapView(self.mower_map, self.robot_pose, self.track)
+        diameter = as_number(
+            dig(
+                self.extra.get("FEATURE_INFO"),
+                "feature_info",
+                "cutter_feature",
+                "main_cutter_diameter_mm",
+            )
+        )
+        return MapView(
+            self.mower_map,
+            self.robot_pose,
+            self.track,
+            dict(self.map_layers),
+            diameter / 1000 if diameter and 50 <= diameter <= 1000 else DEFAULT_CUT_WIDTH,
+        )
 
     @callback
-    def async_add_map_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
-        """Call ``listener`` when the map or the mower's position changes."""
+    def async_add_map_listener(
+        self, listener: Callable[[bool], None]
+    ) -> Callable[[], None]:
+        """Call ``listener`` when the map, a layer or the position changes.
+
+        It gets ``True`` when the picture should follow right away (new map,
+        a layer switched), ``False`` for a new position.
+        """
         self._map_listeners.append(listener)
 
         def _remove() -> None:
@@ -374,9 +409,43 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
 
         return _remove
 
-    def _notify_map(self) -> None:
+    def _notify_map(self, immediate: bool = True) -> None:
         for listener in list(self._map_listeners):
-            listener()
+            listener(immediate)
+
+    @callback
+    def set_map_layers(self, layers: dict[str, bool]) -> None:
+        """Show what the options say (changed with the gear on the integration)."""
+        if layers == self.map_layers:
+            return
+        self.map_layers = dict(layers)
+        self._notify_map()
+
+    def restore_map(self) -> None:
+        """Take the map and the last track kept from before a restart."""
+        if self._map_store is None:
+            return
+        kept = self._map_store.get(self.device.duid)
+        if isinstance(raw := kept.get("map"), str):
+            try:
+                parsed = parse_map(base64.b64decode(raw, validate=True))
+            except (binascii.Error, ValueError):
+                parsed = None
+            if parsed is not None:
+                self.mower_map = parsed
+                self._map_version = kept.get("map_version")
+                self.robot_pose = parsed.robot
+        track = kept.get("track")
+        if isinstance(track, list):
+            self.track = [
+                (float(point[0]), float(point[1]))
+                for point in track
+                if isinstance(point, (list, tuple))
+                and len(point) == 2
+                and all(isinstance(value, (int, float)) for value in point)
+            ][-TRACK_MAX_POINTS:]
+        track_time = kept.get("track_time")
+        self.track_time = track_time if isinstance(track_time, (int, float)) else None
 
     def _map_due(self, version: Any) -> bool:
         """Whether to read the map: none yet, or the mower reports a newer one.
@@ -416,6 +485,12 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self.mower_map = parsed
         if self.robot_pose is None:
             self.robot_pose = parsed.robot
+        if self._map_store is not None:
+            self._map_store.update(
+                self.device.duid,
+                map=base64.b64encode(data).decode(),
+                map_version=version,
+            )
         self._notify_map()
         return True
 
@@ -430,11 +505,11 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self.robot_pose = pose
         api = self.mower_api
         activity = derive_activity(api.status, api.return_pending, api.task_pending)
-        now = time.monotonic()
+        now = time.time()
         if activity in (ACTIVITY_MOWING, ACTIVITY_RETURNING):
             if (
-                self._track_moved_at is None
-                or now - self._track_moved_at > TRACK_RESET_GAP.total_seconds()
+                self.track_time is None
+                or now - self.track_time > TRACK_RESET_GAP.total_seconds()
             ):
                 self.track = []
             last = self.track[-1] if self.track else None
@@ -443,10 +518,13 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
                     # Keep the whole run in view: drop every second point.
                     self.track = self.track[::2]
                 self.track.append((pose.x, pose.y))
-                self._track_moved_at = now
+                self.track_time = now
+                if self._map_store is not None:
+                    self._map_store.update(
+                        self.device.duid, track=self.track, track_time=now
+                    )
         if previous is None or previous != pose:
-            self._notify_map()
-
+            self._notify_map(immediate=False)
 
 def _distance(a: tuple[float, float], b: tuple[float, float]) -> float:
     return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
