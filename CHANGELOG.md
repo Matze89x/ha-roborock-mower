@@ -3,7 +3,7 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
-## 0.6.0 – Settings to switch
+## 0.5.1 – Settings to switch
 
 **Kurzfassung (Deutsch):** Deine Einstellungen lassen sich jetzt in Home
 Assistant schalten, nicht mehr nur ablesen: **Regenschutz** und **Wartezeit

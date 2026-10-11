@@ -769,7 +769,7 @@ def _remove_retired_entities(hass: HomeAssistant, runtime: MowerRuntimeData) -> 
         ("sensor", "rotation_angle"),
         # 0.4.0: the number of passes became a number to set.
         ("sensor", "mow_passes"),
-        # 0.6.0: settings that became switches / a number to set.
+        # 0.5.1: settings that became switches / a number to set.
         ("binary_sensor", "rain_protection"),
         ("binary_sensor", "do_not_disturb"),
         ("binary_sensor", "anti_theft_enabled"),
