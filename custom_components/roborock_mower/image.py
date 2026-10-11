@@ -1,8 +1,8 @@
 """Image platform for the Roborock mower: the map, drawn like in the app.
 
 The map (``get_map_diff``) shows the zones' boundaries, their names and the
-charging station; the mower's position and the track of its run (as the
-mowed strip) follow while it mows. The integration's options (the gear)
+charging station; the mower's position and the track of its run (white
+lines, like the app) follow while it mows. The integration's options (the gear)
 choose what is shown. Drawn as SVG, so it stays sharp at any size.
 """
 

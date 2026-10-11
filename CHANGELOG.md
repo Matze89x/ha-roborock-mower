@@ -3,25 +3,26 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
-## 0.5.0 – Map options and the mowed track
+## 0.5.0 – Map like the app, map options, track kept
 
-**Kurzfassung (Deutsch):** Die Fahrspur wird jetzt wie in der App als
-**gemähter Streifen** gezeichnet (so breit wie die Messerscheibe, mit der
-gefahrenen Linie darin) und bleibt auch **nach einem Neustart** von Home
-Assistant erhalten. Bisher lag sie nur im Arbeitsspeicher und war als dünne
-weiße Linie kaum zu sehen. **Was die Karte zeigt**, stellst du wie bei der
-offiziellen Roborock-Integration über das **Zahnrad** der Integration ein:
-Fahrspur, Zonennamen, Ladestation, Mäher sowie Raster (1 m) mit Maßstab. Die
-Änderungen gelten sofort, ohne Neustart. Ladestation und Mäher haben neue,
-besser erkennbare Symbole (Häuschen, Mäher mit Richtungspfeil). Nach einem
-Neustart ist die Karte sofort da und wird nur neu geholt, wenn der Mäher eine
-geänderte Karte meldet.
+**Kurzfassung (Deutsch):** Die Karte sieht jetzt aus wie in der Roborock-App:
+dunkelgrüner Rasen mit hellem Rand, die **Fahrspur als weiße Linien**, der
+helle **Stellplatz der Ladestation** und **Hugo von oben**, gedreht in
+Fahrtrichtung; der Zonenname in hellem Türkis. Die Fahrspur der aktuellen bzw.
+letzten Mähfahrt bleibt jetzt auch **nach einem Neustart** von Home Assistant
+erhalten. Bisher lag sie nur im Arbeitsspeicher und war als dünne Linie kaum
+zu sehen. **Was die Karte zeigt**, stellst du wie bei der offiziellen
+Roborock-Integration über das **Zahnrad** der Integration ein: Fahrspur,
+Zonennamen, Ladestation mit Stellplatz, Mäher sowie Raster (1 m) mit Maßstab.
+Die Änderungen gelten sofort, ohne Neustart. Nach einem Neustart ist die
+Karte sofort da und wird nur neu geholt, wenn der Mäher eine geänderte Karte
+meldet.
 
 ### New
 
 - Options flow (the gear on the integration): map layers track, zone names,
-  charging station, mower, grid and scale bar; applied live through an
-  update listener, no reload.
+  charging station (with its place), mower, grid and scale bar; applied live
+  through an update listener, no reload.
 - The map and the track of the last run are kept in `.storage`
   (`roborock_mower.<entry>.map`, written within a minute and when Home
   Assistant stops); restored at start, removed with the integration. Never
@@ -30,9 +31,10 @@ geänderte Karte meldet.
 
 ### Changes
 
-- The track is drawn as the mowed strip (blade disc width from
-  `GET_FEATURE_INFO`, else 22 cm) with the driven line on top; the station is
-  a small house, the mower a disc with a heading arrow.
+- Drawn in the style of the Roborock app: dark green lawn with a light
+  edge, the track as white lines, a light rounded place around the charging
+  station (turned like the station), the mower from above (turned to its
+  heading; it hides the station when docked), zone names in light teal.
 - The track's run is measured in wall-clock time, so a restart in the middle
   of a run continues its track.
 

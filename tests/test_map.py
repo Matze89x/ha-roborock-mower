@@ -124,11 +124,11 @@ def test_the_map_is_drawn() -> None:
     assert root.get("viewBox") == "0 0 12.000 10.000"
     assert root.get("width") == "480"
     tags = [child.tag.rsplit("}", 1)[-1] for child in root]
-    # Lawn, mowed strip and line driven, zone name, station, mower and arrow.
-    assert tags == ["polygon", "polyline", "polyline", "text", "path", "circle", "polygon"]
-    assert "Wiese &lt;hinten&gt; · 80 m²" in svg
-    # The mowed strip is as wide as the blade disc.
-    assert root[1].get("stroke-width") == "0.220"
+    # Lawn, station place, track, zone name, station and mower.
+    assert tags == ["polygon", "rect", "polyline", "text", "g", "g"]
+    assert ">Wiese &lt;hinten&gt;</text>" in svg
+    # The mower is turned to where it heads (yaw 0: east, not turned).
+    assert root[5].get("transform") == "translate(5.500 4.500) rotate(-0.0)"
     # North up: y = 8 m (top of the lawn) is near the top of the picture.
     polygon = root[0].get("points").split()
     assert polygon[2] == "10.500,0.500"
@@ -145,12 +145,15 @@ def test_map_layers_can_be_switched() -> None:
     assert [child.tag.rsplit("}", 1)[-1] for child in root] == ["polygon"]
 
     svg = render_svg(
-        MapView(mower_map, None, [], {**DEFAULT_MAP_LAYERS, "grid": True}, 0.3)
+        MapView(mower_map, None, [], {**DEFAULT_MAP_LAYERS, "grid": True})
     ).decode()
     # Grid lines every metre and a 5 m scale bar (the map is 12 m wide);
-    # the mower drawn where the map file saw it.
+    # the mower drawn where the map file saw it, the station next to it.
     assert "5 m</text>" in svg
-    assert svg.count("<circle") == 1
+    assert svg.count("<g ") == 2
+    # On the station the mower hides it.
+    docked = MapView(mower_map, Pose(0.5, 0.5, -1.0), [])
+    assert render_svg(docked).decode().count("<g ") == 1
 
 
 def test_drawing_without_map_size() -> None:

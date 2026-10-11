@@ -59,9 +59,9 @@
         "title": "Kartenoptionen",
         "description": "Was das Kartenbild zeigt. Änderungen gelten sofort.",
         "data": {
-          "map_track": "Fahrspur der aktuellen bzw. letzten Mähfahrt (gemähter Streifen)",
-          "map_labels": "Zonennamen und Fläche",
-          "map_dock": "Ladestation",
+          "map_track": "Fahrspur der aktuellen bzw. letzten Mähfahrt (weiße Linien)",
+          "map_labels": "Zonennamen",
+          "map_dock": "Ladestation und Stellplatz",
           "map_mower": "Mäher mit Fahrtrichtung",
           "map_grid": "Raster (1 m) und Maßstab"
         }

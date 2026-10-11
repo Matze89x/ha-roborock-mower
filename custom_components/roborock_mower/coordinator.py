@@ -37,7 +37,6 @@ from .const import (
 )
 from .home_data import HomeDataProvider
 from .map_data import (
-    DEFAULT_CUT_WIDTH,
     MapView,
     MowerMap,
     Pose,
@@ -61,7 +60,7 @@ from .mower_api import (
     derive_activity,
     redact_dps,
 )
-from .robot_status import as_number, dig, redact_private
+from .robot_status import dig, redact_private
 from .storage import MowerCacheStore, MowerMapStore
 from .vendor.roborock.data import HomeDataDevice, HomeDataProduct, UserData
 from .vendor.roborock.exceptions import RoborockException, RoborockInvalidCredentials
@@ -376,20 +375,8 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         """The map with the latest position and track, once the map is read."""
         if self.mower_map is None:
             return None
-        diameter = as_number(
-            dig(
-                self.extra.get("FEATURE_INFO"),
-                "feature_info",
-                "cutter_feature",
-                "main_cutter_diameter_mm",
-            )
-        )
         return MapView(
-            self.mower_map,
-            self.robot_pose,
-            self.track,
-            dict(self.map_layers),
-            diameter / 1000 if diameter and 50 <= diameter <= 1000 else DEFAULT_CUT_WIDTH,
+            self.mower_map, self.robot_pose, self.track, dict(self.map_layers)
         )
 
     @callback
