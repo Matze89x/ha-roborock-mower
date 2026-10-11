@@ -77,6 +77,12 @@
         "ru": "Russia",
         "cn": "China"
       }
+    },
+    "query_channel": {
+      "options": {
+        "normal": "Normal",
+        "map": "Map channel (cloud)"
+      }
     }
   },
   "entity": {
@@ -102,29 +108,8 @@
       "map_editing": {
         "name": "Map being edited"
       },
-      "rain_protection": {
-        "name": "Rain protection"
-      },
-      "do_not_disturb": {
-        "name": "Do not disturb"
-      },
       "do_not_disturb_active": {
         "name": "Do-not-disturb time now"
-      },
-      "anti_theft_enabled": {
-        "name": "Anti-theft enabled"
-      },
-      "path_obstacle_detection": {
-        "name": "Obstacle detection on paths"
-      },
-      "edge_camera_avoidance": {
-        "name": "Camera avoidance at the edge"
-      },
-      "passage_camera_avoidance": {
-        "name": "Camera avoidance in passages"
-      },
-      "obstacle_photo_privacy": {
-        "name": "Obstacle photo privacy"
       }
     },
     "sensor": {
@@ -461,9 +446,6 @@
       "last_fault_date": {
         "name": "Last fault date"
       },
-      "rain_delay": {
-        "name": "Wait after rain"
-      },
       "rain_state": {
         "name": "Rain status",
         "state": {
@@ -519,6 +501,9 @@
       },
       "mow_passes": {
         "name": "Mowing passes"
+      },
+      "rain_delay": {
+        "name": "Wait after rain"
       }
     },
     "select": {
@@ -565,11 +550,40 @@
     "switch": {
       "edge_cut_while_mowing": {
         "name": "Edge cut while mowing"
+      },
+      "rain_protection": {
+        "name": "Rain protection"
+      },
+      "do_not_disturb": {
+        "name": "Do not disturb"
+      },
+      "anti_theft": {
+        "name": "Anti-theft"
+      },
+      "path_obstacle_detection": {
+        "name": "Obstacle detection on paths"
+      },
+      "edge_camera_avoidance": {
+        "name": "Camera avoidance at the edge"
+      },
+      "passage_camera_avoidance": {
+        "name": "Camera avoidance in passages"
+      },
+      "obstacle_photo_privacy": {
+        "name": "Obstacle photo privacy"
       }
     },
     "image": {
       "map": {
         "name": "Map"
+      }
+    },
+    "time": {
+      "do_not_disturb_start": {
+        "name": "Do not disturb from"
+      },
+      "do_not_disturb_end": {
+        "name": "Do not disturb until"
       }
     }
   },
@@ -621,6 +635,10 @@
         "payload": {
           "name": "Extra fields",
           "description": "Optional additional fields for the query."
+        },
+        "channel": {
+          "name": "Channel",
+          "description": "\"Normal\" asks the mower directly (local or MQTT). \"Map channel\" asks through the cloud like the app asks for the map; the mower then sends the answer as a separate, encrypted message."
         }
       }
     },

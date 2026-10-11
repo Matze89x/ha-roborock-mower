@@ -352,3 +352,40 @@ every 2 seconds as a protocol-702 message: `PB` + protobuf, the same status as
 holds the **GPS position as 64-bit doubles**: the integration never reads
 64-bit values from these messages, and `save_map_data` shows every 64-bit value
 as `**REDACTED**`.
+
+---
+
+## 12. Settings and schedules — writing (names from the app plugin)
+
+The app plugin's protobuf code names the `RemoteMsg` fields
+(`.rock.common.remote.RemoteMsg.<field>`) and the commands. Each part of
+`GET_USER_MODE_CONFIG` is written with its own command and a `RemoteMsg` field
+of the same name; like `SET_MOW_PREFERENCE`, the integration sends the whole
+part as read, with the change, and reads the settings again to confirm:
+
+| part (`user_mode_config.*`) | command | fields used |
+|---|---|---|
+| `rainfall_config` | `SET_RAINFALL` | `enable`, `delay_time` (h); `type` (rain now) sent back as read |
+| `not_disturb_config` | `SET_NOT_DISTURB` | `enable`, `time[0].start` / `.end` `{hour, minute}` (zeros left out) |
+| `anti_theft_config` | `SET_ANTI_THEFT` | `enable`; `e_fence_range` (m) also has `SET_E_FENCE_RANGE` |
+| `nav_common_config` | `SET_NAV_COMMON_CONFIG` | `path_detect_avoid`, `edge_vision_avoid`, `channel_vision_avoid`, `obstacle_image_privacy`, `navigation_type` |
+
+Further `RemoteMsg` fields: `ack`, `ai_obs_cmd`, `audio_config`,
+`custom_mow_preference`, `mow_preference`, `mow_preference_config`,
+`mowing_plan`, `remote_mow_config`, `remote_cmd`, `modify_map`,
+`maintenance_reminder` / `_reset` / `_status_request`, `realtime_video(_config)`,
+`network_mode`, `dock_pair_info`, … Further commands: `SET_AI_OBSTACLE_AVOIDANCE`,
+`SET_LIVING_OBSTACLE`, `SET_CHILD_LOCK_ENABLE`, `SET_LIFT_ALARM_ENABLE`,
+`SET_LED_AUTO_LIGHT`, `SET_LED_MODE`, `SET_AUDIO`, `SET_EDGE_CUTTER`,
+`SET_MAIN_CUTTER_HEIGHT`, `SET_CUSTOM_MOW_PREFERENCE`, `SET_REMOTE_MOW_CONFIG`,
+`SET_PAUSE`, … (not used yet).
+
+**Schedules (not used yet).** `GET_MOW_SCHEDULE` answers `mow_schedule`
+(`MowSchedule.plans[]`, each a `MowingPlan` with `days[]` and `config`); on a
+Q105 the plain query timed out, so it may come through the map channel
+(`roborock_mower.query` with `channel: map`). Plans are changed with
+`CREATE_MOWING_PLAN`, `CHANGE_MOWING_PLAN` (the app's "enabled" toggle),
+`DELETE_MOWING_PLAN` / `DELETE_MOW_SCHEDULE`, all with `RemoteMsg.mowing_plan`;
+`CANCEL_PLAN_MOW` likely cancels a running scheduled mow. Plans have no names:
+the app shows their times (e.g. 08:00–10:35). `GET_ZONES_PLAN_INFO` lists the
+plan ids per zone and the status' `next_plan` the next one.

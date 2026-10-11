@@ -37,6 +37,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ATTR_AREA_IDS,
     ATTR_AREA_NAMES,
+    ATTR_CHANNEL,
     ATTR_CONTAINS,
     ATTR_DEVICE_ID,
     ATTR_FROM_APP,
@@ -115,6 +116,9 @@ _QUERY_SCHEMA = vol.Schema(
         vol.Required(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
         vol.Required(ATTR_QUERY_TYPE): cv.string,
         vol.Optional(ATTR_PAYLOAD, default={}): dict,
+        # "map": through the cloud map channel, for answers the mower sends
+        # as a separate encrypted message.
+        vol.Optional(ATTR_CHANNEL, default="normal"): vol.In(["normal", "map"]),
     }
 )
 
@@ -457,16 +461,33 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         result: dict[str, Any] = {}
         for device_id in call.data[ATTR_DEVICE_ID]:
             for coordinator in _coordinators_for_device(hass, device_id):
+                api = coordinator.mower_api
                 try:
-                    answer = await coordinator.mower_api.query(
-                        call.data[ATTR_QUERY_TYPE], **call.data[ATTR_PAYLOAD]
-                    )
+                    if call.data[ATTR_CHANNEL] == "map":
+                        async with asyncio.timeout(MAP_TIMEOUT):
+                            data = await api.query_map_channel(
+                                call.data[ATTR_QUERY_TYPE], **call.data[ATTR_PAYLOAD]
+                            )
+                        # JSON redacted, protobuf without its 64-bit values.
+                        answer: Any = (
+                            {"bytes": len(data)} | readable_frame(data)
+                            if data
+                            else {"error": "no data in the answer"}
+                        )
+                    else:
+                        answer = redact_private(
+                            await api.query(
+                                call.data[ATTR_QUERY_TYPE], **call.data[ATTR_PAYLOAD]
+                            )
+                        )
                 except ValueError as err:
                     raise ServiceValidationError(str(err)) from err
+                except TimeoutError as err:
+                    raise HomeAssistantError("Query failed: no answer") from err
                 except RoborockException as err:
                     raise HomeAssistantError(f"Query failed: {err}") from err
                 # Never hand out the mower's position or network identifiers.
-                result[coordinator.device.duid] = {"answer": redact_private(answer)}
+                result[coordinator.device.duid] = {"answer": answer}
         return result
 
     async def _scan_queries(call: ServiceCall) -> ServiceResponse:
@@ -748,6 +769,15 @@ def _remove_retired_entities(hass: HomeAssistant, runtime: MowerRuntimeData) -> 
         ("sensor", "rotation_angle"),
         # 0.4.0: the number of passes became a number to set.
         ("sensor", "mow_passes"),
+        # 0.6.0: settings that became switches / a number to set.
+        ("binary_sensor", "rain_protection"),
+        ("binary_sensor", "do_not_disturb"),
+        ("binary_sensor", "anti_theft_enabled"),
+        ("binary_sensor", "path_obstacle_detection"),
+        ("binary_sensor", "edge_camera_avoidance"),
+        ("binary_sensor", "passage_camera_avoidance"),
+        ("binary_sensor", "obstacle_photo_privacy"),
+        ("sensor", "rain_delay"),
     )
     for coordinator in runtime.coordinators:
         for platform, key in retired:

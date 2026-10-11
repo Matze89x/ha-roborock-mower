@@ -368,6 +368,12 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
             if key == "FEATURE_INFO" and first:
                 self._update_device_model()
 
+    async def async_set_user_mode(self, part: str, **changes: Any) -> None:
+        """Change a setting on the mower and show the settings it now reports."""
+        settings = await self.mower_api.set_user_mode(part, **changes)
+        self.extra["USER_MODE_CONFIG"] = redact_private(settings)
+        self.async_update_listeners()
+
     # -- map ----------------------------------------------------------------------
 
     @property

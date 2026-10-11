@@ -3,6 +3,39 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.6.0 – Settings to switch
+
+**Kurzfassung (Deutsch):** Deine Einstellungen lassen sich jetzt in Home
+Assistant schalten, nicht mehr nur ablesen: **Regenschutz** und **Wartezeit
+nach Regen**, **Nicht stören** (an/aus und von/bis), **Diebstahlschutz**,
+dazu (standardmäßig ausgeblendet) Hinderniserkennung auf Wegen,
+Kamera-Ausweichen am Rand und in Durchgängen und Datenschutz für
+Hindernisfotos. Die Befehle stammen aus der Roborock-App. Jede Änderung wird
+danach beim Mäher nachgelesen: Übernimmt er sie nicht, gibt es eine
+Fehlermeldung statt eines falschen Schalterzustands. Die bisherigen reinen
+Anzeigen dafür entfallen. Neu: Die Aktion „Mäher abfragen“ kann auch über
+den Kartenkanal (Cloud) fragen, für die Mähpläne.
+
+### New
+
+- Switches (configuration) rain protection, do not disturb, anti-theft, and
+  disabled by default obstacle detection on paths, camera avoidance at the
+  edge / in passages, obstacle photo privacy; number "Wait after rain"
+  (0–24 h); time entities "Do not disturb from / until".
+- Written like the app: `SET_RAINFALL` / `SET_NOT_DISTURB` / `SET_ANTI_THEFT` /
+  `SET_NAV_COMMON_CONFIG` with the whole part of `GET_USER_MODE_CONFIG`
+  (`rainfall_config` …) and the change, then read back; a setting the mower
+  doesn't take raises an error (`MowerSettingNotApplied`).
+- `roborock_mower.query` option `channel: map`: ask through the cloud map
+  channel (decrypted answer shown as JSON or protobuf without 64-bit values).
+- PROTOCOL.md §12: the app's setting and schedule commands.
+
+### Changes
+
+- The read-only views rain protection, do not disturb, anti-theft enabled,
+  the four navigation options and the "wait after rain" sensor are replaced
+  by the entities above and removed.
+
 ## 0.5.0 – Map like the app, map options, track kept
 
 **Kurzfassung (Deutsch):** Die Karte sieht jetzt aus wie in der Roborock-App:

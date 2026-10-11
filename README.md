@@ -40,9 +40,8 @@ Was sich in welcher Version geändert hat, steht in den
   geschätzte Mähdauer, nächster geplanter Mähvorgang, letztes Mähen (Beginn, Ende,
   Dauer, Fläche, Abdeckung, Endgrund, abgebrochen ja/nein); unter **Diagnose**
   WLAN-Signal, Verbindungsweg, Mobilfunk (4G), RTK-Positionsbestimmung, letztes
-  Ereignis, letzter Fehler (Code und Datum aus dem Fehlerverlauf), Regenschutz und
-  Wartezeit nach Regen, Nicht stören (und ob die Zeit gerade läuft),
-  Diebstahlschutz, Anzahl der Mähpläne; das Gerät zeigt das genaue Modell (z. B.
+  Ereignis, letzter Fehler (Code und Datum aus dem Fehlerverlauf), ob die
+  Nicht-stören-Zeit gerade läuft, Anzahl der Mähpläne; das Gerät zeigt das genaue Modell (z. B.
   RockNeo Q105). Viele weitere Werte (WLAN-Qualität, RTK-Modus, LoRa, Diebstahlschutz,
   Energie- und Systemzustände, Karte, Mäheinstellungen wie die Randerkennung,
   Hinderniserkennung, Kantenschneider …) sind ebenfalls unter
@@ -53,7 +52,11 @@ Was sich in welcher Version geändert hat, steht in den
   Stellplatz, der Mäher in Fahrtrichtung und die Fahrspur der aktuellen bzw. letzten
   Mähfahrt; beim Mähen alle paar Sekunden aktualisiert, Ebenen über das Zahnrad
   der Integration wählbar
-- **Einstellungen ändern** – Mäheffizienz (Standard / Effizient / Feinschnitt),
+- **Einstellungen ändern** – Regenschutz und Wartezeit nach Regen, Nicht stören
+  (an/aus, von/bis), Diebstahlschutz, dazu (standardmäßig ausgeblendet)
+  Hinderniserkennung auf Wegen, Kamera-Ausweichen am Rand und in Durchgängen und
+  Datenschutz für Hindernisfotos; jede Änderung wird beim Mäher nachgelesen.
+  Außerdem Mäheffizienz (Standard / Effizient / Feinschnitt),
   Mähdurchgänge, Kantenschnitt beim Mähen (Schalter), Richtungsmodus (Auto / Optimal /
   Benutzerdefiniert), Richtungsänderung je Mähvorgang (15/30/60/90°), Winkel für
   „Benutzerdefiniert“ (5°-Schritte), Schnitthöhe (wo das Modell sie hat). Zonen,
@@ -217,9 +220,8 @@ What changed in which version is listed in the
   area, estimated mowing time, next scheduled mow, last mow (start, end,
   duration, area, coverage, end reason, aborted yes/no); under **Diagnostic**
   Wi-Fi signal, connection route, mobile network (4G), RTK positioning, last
-  event, last fault (code and date from the fault history), rain protection and
-  wait after rain, do not disturb (and whether its time is now), anti-theft,
-  number of schedules; the device shows the exact model (e.g. RockNeo Q105).
+  event, last fault (code and date from the fault history), whether the
+  do-not-disturb time is now, number of schedules; the device shows the exact model (e.g. RockNeo Q105).
   Many more values (Wi-Fi quality, RTK mode, LoRa, anti-theft, energy and
   system states, map, mowing preferences such as boundary perception, obstacle
   avoidance, edge trimmer, …) are under **Diagnostic** too, disabled by default.
@@ -230,7 +232,11 @@ What changed in which version is listed in the
   station with its place, the mower turned where it heads, and the track of the
   current or last run; updated every few seconds while mowing, layers chosen with
   the integration's gear
-- **Change settings** – mowing efficiency (Standard / Efficient / Manicure),
+- **Change settings** – rain protection and wait after rain, do not disturb
+  (on/off, from/until), anti-theft, plus (hidden by default) obstacle
+  detection on paths, camera avoidance at the edge and in passages and obstacle
+  photo privacy; every change is read back from the mower. Also mowing
+  efficiency (Standard / Efficient / Manicure),
   mowing passes, edge cut while mowing (switch), direction mode (Auto / Optimal / Custom), direction
   change per mow (15/30/60/90°), angle for "Custom" (5° steps), cutting height
   (where the model has it). Zones with their own settings in the app are listed

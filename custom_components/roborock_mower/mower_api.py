@@ -109,6 +109,15 @@ def is_mower(product: Any) -> bool:
 TYPE_APP_BUTTON = "APP_BUTTON"
 TYPE_REMOTE_CMD = "REMOTE_CMD"
 TYPE_SET_MOW_PREFERENCE = "SET_MOW_PREFERENCE"
+TYPE_GET_USER_MODE_CONFIG = "GET_USER_MODE_CONFIG"
+# The parts of the settings (GET_USER_MODE_CONFIG) and the command that writes
+# each one; the RemoteMsg field has the part's name (both from the app plugin).
+USER_MODE_COMMANDS = {
+    "rainfall_config": "SET_RAINFALL",
+    "not_disturb_config": "SET_NOT_DISTURB",
+    "anti_theft_config": "SET_ANTI_THEFT",
+    "nav_common_config": "SET_NAV_COMMON_CONFIG",
+}
 TYPE_GET_MOW_PREFERENCE_CONFIG = "GET_MOW_PREFERENCE_CONFIG"
 TYPE_GET_MAP_NAMES = "GET_MAP_NAMES"
 TYPE_GET_FULL_MAP = "GET_FULL_MAP"
@@ -502,6 +511,27 @@ class MowerCommandRejected(RoborockException):
     """The mower answered a command with ``["fail"]``."""
 
 
+class MowerSettingNotApplied(RoborockException):
+    """The mower accepted a setting but still reports the old value."""
+
+
+def _proto_value(value: Any) -> Any:
+    """A value as protobuf keeps it: false, 0, "" and empty parts are left out.
+
+    The mower's JSON answers omit such defaults (``{"hour": 8}`` for 08:00),
+    so values are compared in this form.
+    """
+    if isinstance(value, dict):
+        return {
+            key: item
+            for key, item in ((key, _proto_value(item)) for key, item in value.items())
+            if item not in (None, False, 0, "", [], {})
+        }
+    if isinstance(value, list):
+        return [_proto_value(item) for item in value]
+    return value
+
+
 def _now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -880,6 +910,30 @@ class MowerApi:
             self.preference_config["global"] = pref
         return result
 
+    async def set_user_mode(self, part: str, **changes: Any) -> dict[str, Any]:
+        """Change fields of one part of the settings (rain, do not disturb, ...).
+
+        Like the mowing preference, the part is read first and sent back whole
+        with the changes (``SET_RAINFALL`` with ``rainfall_config`` and so on),
+        then read again: a setting the mower did not take raises
+        :class:`MowerSettingNotApplied`. Returns the new settings (raw, with
+        private fields: callers redact them).
+        """
+        command = USER_MODE_COMMANDS[part]
+        before = await self.get_info(TYPE_GET_USER_MODE_CONFIG, record=False)
+        current = (before or {}).get("user_mode_config", {}).get(part)
+        if not isinstance(current, dict):
+            raise RoborockException(f"Could not read {part} from the mower")
+        await self._send_remote_msg({"type": command, part: {**current, **changes}})
+        after = await self.get_info(TYPE_GET_USER_MODE_CONFIG, record=False)
+        applied = (after or {}).get("user_mode_config", {}).get(part)
+        if not isinstance(applied, dict) or any(
+            _proto_value(applied.get(key)) != _proto_value(value)
+            for key, value in changes.items()
+        ):
+            raise MowerSettingNotApplied(f"The mower kept its {part}")
+        return after
+
     async def set_mow_eff_mode(self, mode: int) -> Any:
         """Set the efficiency mode (MowPreference.effective) via SET_MOW_PREFERENCE.
 
@@ -1060,13 +1114,21 @@ class MowerApi:
         message, which the bundled library decrypts and unpacks. Asked over the
         local connection, the mower only says ``["ok"]``.
         """
+        return await self.query_map_channel(query_type, modify_map={"name": map_name})
+
+    async def query_map_channel(self, query_type: str, **extra: Any) -> bytes | None:
+        """A read-only ``GET_*`` query through the cloud map channel.
+
+        For answers the mower sends as a separate, encrypted message (maps,
+        possibly the mowing schedule); returns the decrypted bytes.
+        """
         query_type = query_type.strip().upper()
         if not query_type.startswith("GET_"):
             raise ValueError("Only read-only GET_* queries are allowed")
         message = {
             "id": str(int(time.time() * 1000)),
             "type": query_type,
-            "modify_map": {"name": map_name},
+            **{key: value for key, value in extra.items() if key not in ("type", "id")},
         }
         try:
             result = await self._channel.map_rpc_channel.send_command(

@@ -1,9 +1,8 @@
 """Binary sensor platform for the Roborock mower.
 
-Yes/no values of the mower's full status (``GET_ROBOT_STATUS``), its mowing
-preferences and its settings (``GET_USER_MODE_CONFIG``: rain protection,
-do-not-disturb, anti-theft). All diagnostic; only "last mow aborted" is
-enabled by default.
+Yes/no values of the mower's full status (``GET_ROBOT_STATUS``) and whether
+the do-not-disturb time is running now. All diagnostic; only "last mow
+aborted" is enabled by default. The settings themselves are switches.
 """
 
 from __future__ import annotations
@@ -76,23 +75,6 @@ BINARY_SENSORS: list[RobotStatusBinarySensorDescription] = [
         value_fn=_flag("last_mow_abstract", "abnormal_end"),
     ),
     RobotStatusBinarySensorDescription(
-        key="rain_protection",
-        translation_key="rain_protection",
-        icon="mdi:weather-rainy",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_setting("rainfall_config", "enable"),
-    ),
-    RobotStatusBinarySensorDescription(
-        key="do_not_disturb",
-        translation_key="do_not_disturb",
-        icon="mdi:minus-circle-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_setting("not_disturb_config", "enable"),
-        attrs_fn=_dnd_attrs,
-    ),
-    RobotStatusBinarySensorDescription(
         key="do_not_disturb_active",
         translation_key="do_not_disturb_active",
         icon="mdi:sleep",
@@ -100,14 +82,6 @@ BINARY_SENSORS: list[RobotStatusBinarySensorDescription] = [
         entity_registry_enabled_default=False,
         value_fn=_dnd_now,
         attrs_fn=_dnd_attrs,
-    ),
-    RobotStatusBinarySensorDescription(
-        key="anti_theft_enabled",
-        translation_key="anti_theft_enabled",
-        icon="mdi:shield-lock-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_setting("anti_theft_config", "enable"),
     ),
     RobotStatusBinarySensorDescription(
         key="local_connection",
@@ -156,38 +130,6 @@ BINARY_SENSORS: list[RobotStatusBinarySensorDescription] = [
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         value_fn=_flag("navigation", "map_editing"),
-    ),
-    RobotStatusBinarySensorDescription(
-        key="path_obstacle_detection",
-        translation_key="path_obstacle_detection",
-        icon="mdi:road-variant",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_setting("nav_common_config", "path_detect_avoid"),
-    ),
-    RobotStatusBinarySensorDescription(
-        key="edge_camera_avoidance",
-        translation_key="edge_camera_avoidance",
-        icon="mdi:camera-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_setting("nav_common_config", "edge_vision_avoid"),
-    ),
-    RobotStatusBinarySensorDescription(
-        key="passage_camera_avoidance",
-        translation_key="passage_camera_avoidance",
-        icon="mdi:camera-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_setting("nav_common_config", "channel_vision_avoid"),
-    ),
-    RobotStatusBinarySensorDescription(
-        key="obstacle_photo_privacy",
-        translation_key="obstacle_photo_privacy",
-        icon="mdi:image-off-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_setting("nav_common_config", "obstacle_image_privacy"),
     ),
 ]
 

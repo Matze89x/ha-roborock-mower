@@ -371,7 +371,6 @@ def test_sensor_values_from_the_live_status() -> None:
         "plan_count": 3,
         "last_fault": 35,
         "last_fault_date": date(2026, 10, 2),
-        "rain_delay": 8,
         "rain_state": "rain_no",
         "anti_theft_range": 100,
         "navigation_mode": "more_coverage",
@@ -451,14 +450,7 @@ def test_binary_sensor_values_from_the_live_status() -> None:
         "edge_cutter": True,
         "safety_lock": False,
         "map_editing": False,
-        "rain_protection": True,
-        "do_not_disturb": True,
         "do_not_disturb_active": False,
-        "anti_theft_enabled": False,
-        "path_obstacle_detection": True,
-        "edge_camera_avoidance": False,
-        "passage_camera_avoidance": False,
-        "obstacle_photo_privacy": True,
     }
 
 
@@ -608,7 +600,6 @@ async def test_status_entities_follow_the_mower(
         ("sensor", "lawn_area"),
         ("sensor", "plan_count"),
         ("sensor", "last_fault"),
-        ("binary_sensor", "rain_protection"),
     )
     await _setup(hass, config_entry)
 
@@ -636,7 +627,7 @@ async def test_status_entities_follow_the_mower(
     )
     assert hass.states.get(_entity_id(hass, "sensor", "plan_count")).state == "3"
     assert hass.states.get(_entity_id(hass, "sensor", "last_fault")).state == "35"
-    assert hass.states.get(_entity_id(hass, "binary_sensor", "rain_protection")).state == "on"
+    assert hass.states.get(_entity_id(hass, "switch", "rain_protection")).state == "on"
     # The exact model from the mower's product details.
     [device] = dr.async_entries_for_config_entry(
         dr.async_get(hass), config_entry.entry_id
@@ -976,6 +967,12 @@ async def test_a_new_installation_is_not_flooded(
         ("number", "config", "mow_direction_angle"),
         ("number", "config", "mow_passes"),
         ("switch", "config", "edge_cut_while_mowing"),
+        ("switch", "config", "rain_protection"),
+        ("switch", "config", "do_not_disturb"),
+        ("switch", "config", "anti_theft"),
+        ("number", "config", "rain_delay"),
+        ("time", "config", "do_not_disturb_start"),
+        ("time", "config", "do_not_disturb_end"),
         ("sensor", "diagnostic", "error_code"),
         ("sensor", "diagnostic", "last_mow_end_reason"),
         ("sensor", "diagnostic", "wifi_signal"),
