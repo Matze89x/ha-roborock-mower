@@ -380,12 +380,16 @@ Further `RemoteMsg` fields: `ack`, `ai_obs_cmd`, `audio_config`,
 `SET_MAIN_CUTTER_HEIGHT`, `SET_CUSTOM_MOW_PREFERENCE`, `SET_REMOTE_MOW_CONFIG`,
 `SET_PAUSE`, … (not used yet).
 
-**Schedules (not used yet).** `GET_MOW_SCHEDULE` answers `mow_schedule`
-(`MowSchedule.plans[]`, each a `MowingPlan` with `days[]` and `config`); on a
-Q105 the plain query timed out, so it may come through the map channel
-(`roborock_mower.query` with `channel: map`). Plans are changed with
-`CREATE_MOWING_PLAN`, `CHANGE_MOWING_PLAN` (the app's "enabled" toggle),
-`DELETE_MOWING_PLAN` / `DELETE_MOW_SCHEDULE`, all with `RemoteMsg.mowing_plan`;
-`CANCEL_PLAN_MOW` likely cancels a running scheduled mow. Plans have no names:
-the app shows their times (e.g. 08:00–10:35). `GET_ZONES_PLAN_INFO` lists the
-plan ids per zone and the status' `next_plan` the next one.
+**Schedules.** `GET_MOW_SCHEDULE` (plain query) answers
+`{"type": "MOW_SCHEDULE", "mow_schedule": {"plans": [...], "time_zone": "Europe/Berlin"}}`.
+Each plan (`MowingPlan`): `id` (number), `type` (`WEEKLY`), **`status`
+(`OPEN` = active, `CLOSE` = switched off in the app)**, `start` / `end` (unix
+seconds as text on an old date; only the time of day counts, in `time_zone`),
+`days[]` (`{"type": "MONDAY"}` …), `mode` (`GLOBAL` …), `config` (`{mode}`),
+`fsm_state`. Plans have no names; the app shows their times (08:00–10:35). A
+plan is switched with `CHANGE_MOWING_PLAN` and the whole plan in
+`RemoteMsg.mowing_plan` with the new `status` (confirmed by reading the plans
+again). Also in the app: `CREATE_MOWING_PLAN`, `DELETE_MOWING_PLAN`,
+`DELETE_MOW_SCHEDULE`, and `CANCEL_PLAN_MOW` (likely cancels a running
+scheduled mow; not used). `GET_ZONES_PLAN_INFO` lists the plan ids per zone and
+the status' `next_plan` the next active one.
