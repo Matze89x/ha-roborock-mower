@@ -17,6 +17,7 @@ PLATFORMS: list[Platform] = [
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.TIME,
 ]
 
 CONF_USER_DATA = "user_data"
@@ -90,6 +91,7 @@ SERVICE_SAVE_MAP_DATA = "save_map_data"
 ATTR_WAIT = "wait"
 ATTR_QUERY_TYPE = "query_type"
 ATTR_PAYLOAD = "payload"
+ATTR_CHANNEL = "channel"
 ATTR_DEVICE_ID = "device_id"
 ATTR_AREA_IDS = "area_ids"
 ATTR_AREA_NAMES = "area_names"

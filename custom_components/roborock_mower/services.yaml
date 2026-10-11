@@ -49,6 +49,15 @@ query:
       example: "{}"
       selector:
         object:
+    channel:
+      required: false
+      default: normal
+      selector:
+        select:
+          translation_key: query_channel
+          options:
+            - normal
+            - map
 
 scan_queries:
   fields:

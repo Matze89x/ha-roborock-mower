@@ -14,8 +14,8 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import RoborockMowerCoordinator
-from .mower_api import MowerStatus
-from .robot_status import RobotInfo
+from .mower_api import MowerSettingNotApplied, MowerStatus
+from .robot_status import RobotInfo, dig
 from .vendor.roborock.exceptions import RoborockException
 
 
@@ -104,3 +104,25 @@ class RoborockPreferenceEntity(RoborockMowerEntity):
         )
         self.async_write_ha_state()
         self.coordinator.request_settings_refresh()
+
+
+class RoborockUserModeEntity(RoborockMowerEntity):
+    """An entity that shows and changes a part of the mower's settings.
+
+    The parts of ``GET_USER_MODE_CONFIG``: ``rainfall_config``,
+    ``not_disturb_config``, ``anti_theft_config``, ``nav_common_config``.
+    """
+
+    def user_mode(self, part: str) -> dict[str, Any]:
+        value = dig(self.coordinator.extra.get("USER_MODE_CONFIG"), "user_mode_config", part)
+        return value if isinstance(value, dict) else {}
+
+    async def _async_set_user_mode(self, action: str, part: str, **changes: Any) -> None:
+        try:
+            await self.coordinator.async_set_user_mode(part, **changes)
+        except MowerSettingNotApplied as err:
+            raise HomeAssistantError(
+                f"{action}: the mower did not take the setting"
+            ) from err
+        except RoborockException as err:
+            raise HomeAssistantError(f"{action} failed: {err}") from err

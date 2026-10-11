@@ -615,15 +615,6 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         icon="mdi:calendar-alert",
         value_fn=_last_fault_date,
     ),
-    RobotStatusSensorDescription(
-        key="rain_delay",
-        translation_key="rain_delay",
-        device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.HOURS,
-        entity_category=_DIAGNOSTIC,
-        icon="mdi:weather-rainy",
-        value_fn=_extra_number("USER_MODE_CONFIG", "user_mode_config", "rainfall_config", "delay_time"),
-    ),
     # -- diagnostic, disabled by default ----------------------------------------
     RobotStatusSensorDescription(
         key="wifi_quality",
