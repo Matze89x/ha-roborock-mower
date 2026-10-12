@@ -50,39 +50,47 @@ def point(number: int, x: float, y: float, yaw: float | None = None) -> bytes:
 
 LAWN = [(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)]
 
-MAP = b"pb" + b"".join(
-    [
-        sub(1, varint(2, 1700000000000)),
-        sub(
-            4,
-            varint(3, 200),  # height in pixels
-            varint(4, 240),  # width in pixels
-            f32(5, 0.05),
-            f32(6, -1.5),  # origin y
-            f32(7, -0.5),  # origin x
-        ),
-        sub(
-            10,
-            varint(1, 2),
-            *(point(4, x, y) for x, y in LAWN),
-            text(5, "A1"),
+
+def map_message(zone_name: str = "Wiese <hinten>", *extra: bytes) -> bytes:
+    """A map like the mower's ``get_map_diff`` answer (made-up 10 x 8 m lawn)."""
+    return b"pb" + b"".join(
+        [
+            sub(1, varint(2, 1700000000000)),
             sub(
-                7,
-                varint(1, 2),
-                varint(2, 2),
-                text(3, "Wiese <hinten>"),
-                f32(4, 80.0),
-                f32(5, 2400.0),
-                *(point(6, x, y) for x, y in LAWN),
+                4,
+                varint(3, 200),  # height in pixels
+                varint(4, 240),  # width in pixels
+                f32(5, 0.05),
+                f32(6, -1.5),  # origin y
+                f32(7, -0.5),  # origin x
             ),
-            f32(8, 80.0),
-        ),
-        sub(20, point(1, 1.0, 1.0, 0.5), point(2, 0.5, 0.5, -1.0)),
-        f32(29, 80.0),
-        f32(30, 2400.0),
-        text(34, "2026-10-09-12-36-43"),
-    ]
-)
+            sub(
+                10,
+                varint(1, 2),
+                *(point(4, x, y) for x, y in LAWN),
+                text(5, "A1"),
+                sub(
+                    7,
+                    varint(1, 2),
+                    varint(2, 2),
+                    text(3, zone_name),
+                    f32(4, 80.0),
+                    f32(5, 2400.0),
+                    *(point(6, x, y) for x, y in LAWN),
+                ),
+                f32(8, 80.0),
+            ),
+            sub(20, point(1, 1.0, 1.0, 0.5), point(2, 0.5, 0.5, -1.0)),
+            f32(29, 80.0),
+            f32(30, 2400.0),
+            text(34, "2026-10-09-12-36-43"),
+            *extra,
+        ]
+    )
+
+
+MAP = map_message()
+
 
 def stream_frame(x: float, y: float, yaw: float) -> bytes:
     """The status stream while mowing (protocol 702): the position in the

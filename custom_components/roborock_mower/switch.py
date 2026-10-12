@@ -245,18 +245,15 @@ class RoborockPlanSwitch(RoborockMowerEntity, SwitchEntity):
 
     def _label(self) -> str:
         plan = self._plan or {}
-        language = self.hass.config.language if self.hass else "en"
+        # Known before the entity is added, so its entity id is in the
+        # language of Home Assistant too.
+        language = self.coordinator.hass.config.language or "en"
         word = "Mähplan" if language.startswith("de") else "Mowing plan"
         clock = plan_clock(plan, self._time_zone())
         if clock is None:
             return f"{word} {self._plan_id}"
         days = plan_days_label(plan, language)
         return f"{word} {clock[0]}–{clock[1]}" + (f" ({days})" if days else "")
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        # The language is known now.
-        self._attr_name = self._label()
 
     @callback
     def _handle_coordinator_update(self) -> None:

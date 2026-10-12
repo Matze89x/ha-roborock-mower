@@ -14,6 +14,7 @@ JSON status (``GET_ROBOT_STATUS``) of a RockNeo Q105:
       6 points}, 8 area m²
 20    poses {4 x, 5 y, 6 yaw}: 1 mower, 2 charging station
 29    lawn area (m²), 30 expected time (s)
+33    zone list: 1 {1 id, 2 name} -- the names the app shows
 34    time the map file changed (``2026-10-09-12-36-43``)
 ====  ==============================================================
 
@@ -232,11 +233,27 @@ def _strip_prefix(data: bytes) -> bytes:
     return data[2:] if data[:2] in PROTOBUF_PREFIXES else data
 
 
+def _zone_names(fields: dict[int, list[tuple[int, Any]]]) -> dict[int | None, str]:
+    """Zone names by id from the map's zone list (field 33: ``{1 {1 id, 2 name}}``)."""
+    names: dict[int | None, str] = {}
+    for wire, value in fields.get(33, []):
+        if wire != _LENGTH:
+            continue
+        for item_wire, item in _message(value).get(1, []):
+            if item_wire != _LENGTH:
+                continue
+            entry = _message(item)
+            if (name := _text(entry, 2)) and name.strip():
+                names[_int(entry, 1)] = name.strip()
+    return names
+
+
 def parse_map(data: bytes) -> MowerMap | None:
     """The map of a ``get_map_diff`` answer, or None if it holds none."""
     fields = _message(_strip_prefix(bytes(data)))
     if not fields:
         return None
+    names = _zone_names(fields)
     zones: list[MapZone] = []
     for wire, value in fields.get(10, []):
         if wire != _LENGTH:
@@ -246,10 +263,14 @@ def parse_map(data: bytes) -> MowerMap | None:
         points = _points(zone, 6) or _points(area, 4)
         if len(points) < 3:
             continue
+        zone_id = _int(zone, 1) if zone else _int(area, 1)
         zones.append(
             MapZone(
-                id=_int(zone, 1) if zone else _int(area, 1),
-                name=(_text(zone, 3) or _text(area, 5) or "").strip(),
+                id=zone_id,
+                # The zone list has the name the app shows; once the mower
+                # rewrote the map at the start of a run, the zone itself only
+                # carried the short name ("A1").
+                name=(names.get(zone_id) or _text(zone, 3) or _text(area, 5) or "").strip(),
                 points=points,
                 area=_float(zone, 4) if zone else _float(area, 8),
             )
@@ -395,6 +416,8 @@ def map_layers_from_options(options: Mapping[str, Any]) -> dict[str, bool]:
 # in the app) and the place around the charging station, in metres. Both
 # grow on large maps so they stay visible.
 _MOWER_LENGTH, _MOWER_WIDTH = 1.0, 0.74
+# Track positions further apart than this (metres) are not joined by a line.
+TRACK_MAX_GAP = 3.0
 _STATION_PLACE = 1.9
 
 
@@ -506,13 +529,14 @@ def render_svg(view: MapView) -> bytes:
     dock = view.map.dock
     if view.shows("dock") and dock is not None:
         parts.append(_station_place(x_of(dock.x), y_of(dock.y), dock.yaw, unit))
-    if view.shows("track") and len(view.track) > 1:
-        parts.append(
-            f'<polyline points="{path(view.track)}" fill="none" '
-            f'stroke="{_COLORS["track"]}" stroke-opacity="0.9" '
-            f'stroke-width="{unit * 0.16:.3f}" stroke-linecap="round" '
-            'stroke-linejoin="round"/>'
-        )
+    if view.shows("track"):
+        for run in _track_runs(view.track):
+            parts.append(
+                f'<polyline points="{path(run)}" fill="none" '
+                f'stroke="{_COLORS["track"]}" stroke-opacity="0.9" '
+                f'stroke-width="{unit * 0.16:.3f}" stroke-linecap="round" '
+                'stroke-linejoin="round"/>'
+            )
     if view.shows("labels"):
         for zone in zones:
             if not zone.name:
@@ -536,6 +560,22 @@ def render_svg(view: MapView) -> bytes:
         parts.append(_mower(x_of(robot.x), y_of(robot.y), robot.yaw, unit))
     parts.append("</svg>")
     return "".join(parts).encode()
+
+
+def _track_runs(track: list[tuple[float, float]]) -> list[list[tuple[float, float]]]:
+    """The track in pieces that can be drawn as lines.
+
+    Positions further apart than :data:`TRACK_MAX_GAP` were not driven in a
+    straight line (the mower turns every few metres), so they are not joined:
+    a line there would cut across the lawn.
+    """
+    runs: list[list[tuple[float, float]]] = []
+    for point in track:
+        if runs and math.dist(runs[-1][-1], point) <= TRACK_MAX_GAP:
+            runs[-1].append(point)
+        else:
+            runs.append([point])
+    return [run for run in runs if len(run) > 1]
 
 
 def _turned(x: float, y: float, yaw: float | None) -> str:
