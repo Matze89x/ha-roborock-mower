@@ -157,8 +157,10 @@ Die Entität **Karte** (`image.<mäher>_karte`) zeigt die Karte im Stil der App:
 dunkelgrüner Rasen mit Zonennamen, der helle Stellplatz der Ladestation, der
 Mäher von oben in Fahrtrichtung und seine Fahrspur als weiße Linien. Die Karte holt die Integration beim
 Start und immer dann, wenn der Mäher eine geänderte Karte meldet (über die
-Cloud, wie die App). Die Position kommt beim Mähen alle paar Sekunden; das Bild
-wird höchstens alle 10 Sekunden neu gezeichnet. Im Dashboard z. B. mit einer
+Cloud, wie die App). Die Position fragt die Integration beim Mähen alle 5
+Sekunden ab (nur über die Cloud alle 15 Sekunden); ist die Roborock-App offen,
+schickt der Mäher sie alle 2 Sekunden von selbst. Das Bild wird höchstens alle
+10 Sekunden neu gezeichnet. Im Dashboard z. B. mit einer
 **Bild**- oder **Bild-Entität**-Karte anzeigen. Die Fahrspur zeigt die
 aktuelle bzw. letzte Mähfahrt, beginnt mit jeder neuen Fahrt neu und bleibt
 auch nach einem Neustart von Home Assistant erhalten.
@@ -336,8 +338,9 @@ The **Map** entity (`image.<mower>_map`) shows the map in the style of the app:
 dark green lawn with zone names, the light place of the charging station, the
 mower from above turned where it heads, and its track as white lines. The integration reads the map at start and whenever
 the mower reports a changed map (through the cloud, like the app). While mowing
-the position comes every few seconds; the picture is redrawn at most every 10
-seconds. Show it on a dashboard with e.g. a **Picture** or **Picture entity**
+the integration asks for the position every 5 seconds (every 15 seconds through
+the cloud only); while the Roborock app is open the mower sends it every 2
+seconds by itself. The picture is redrawn at most every 10 seconds. Show it on a dashboard with e.g. a **Picture** or **Picture entity**
 card. The track shows the current or last run, starts anew with every run and
 is kept when Home Assistant restarts.
 

@@ -3,6 +3,36 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.5.3 – Map fixes from a live run
+
+**Kurzfassung (Deutsch):** Die Karte sah beim Mähen seltsam aus – das ist
+behoben. Ohne offene Roborock-App schickt Hugo seine Position nicht von
+selbst, die Integration bekam sie nur einmal pro Minute, und die Spur
+verband diese Punkte mit langen Linien quer über den Rasen. Jetzt fragt sie
+die Position beim Mähen alle 5 Sekunden ab (nur über die Cloud alle 15
+Sekunden), sodass die Spur den Bahnen folgt; Punkte mehr als 3 m
+auseinander werden nicht mehr verbunden. Der Zonenname stimmt wieder
+(„Garten“ statt „A1“, nachdem Hugo die Karte beim Start der Fahrt neu
+geschrieben hat). Neue Plan-Schalter bekommen ihre Entitäts-ID in der
+Sprache von Home Assistant (`switch.<mäher>_mahplan_…`); bestehende behalten
+ihre ID.
+
+### Fixes
+
+- Track: without the live status stream (protocol 702, sent only while the
+  Roborock app is open) the position is asked with `GET_ROBOT_STATUS` every
+  5 s while mowing or returning (15 s through the cloud only), instead of
+  once a minute with the status. The polling pauses while the stream brings
+  positions.
+- Track: positions more than 3 m apart are not joined by a line.
+- Zone names come from the map's zone list (field 33); after the mower
+  rewrote the map at the start of a run, the zone itself only held the short
+  name `A1`.
+- Plan switches: the name is known before the entity is added, so new
+  entity ids follow Home Assistant's language.
+- PROTOCOL.md §11: the rewritten map (zone list, edge segments) and the
+  status stream only while the app is open.
+
 ## 0.5.2 – Mowing plans to switch
 
 **Kurzfassung (Deutsch):** Deine Mähpläne aus der App sind jetzt **Schalter**:

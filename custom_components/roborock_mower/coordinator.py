@@ -25,6 +25,10 @@ from .const import (
     HOME_DATA_REUSE_AGE,
     MAP_RETRY_INTERVAL,
     MAP_TIMEOUT,
+    POSITION_IDLE_CHECK,
+    POSITION_INTERVAL,
+    POSITION_INTERVAL_CLOUD,
+    POSITION_STREAM_FRESH,
     PREFERENCE_REFRESH_INTERVAL,
     ROBOT_STATUS_ACTIVE_INTERVAL,
     ROBOT_STATUS_IDLE_INTERVAL,
@@ -178,6 +182,8 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
         self.track_time: float | None = None
         # What the map picture shows (the integration's options).
         self.map_layers: dict[str, bool] = map_layers_from_options(entry.options)
+        # When the live status stream last brought a position (monotonic).
+        self._stream_pose_at: float | None = None
         self._map_store = map_store
         self._map_tried_at: float | None = None
         self._map_version: Any = None
@@ -515,6 +521,45 @@ class RoborockMowerCoordinator(DataUpdateCoordinator[MowerStatus]):
             )
         self._notify_map()
         return True
+
+    @callback
+    def note_stream_pose(self, pose: Pose) -> None:
+        """A position from the live status stream (protocol 702)."""
+        self._stream_pose_at = time.monotonic()
+        self.note_pose(pose)
+
+    def _drives(self) -> bool:
+        """Whether the mower is out mowing or on its way back."""
+        api = self.mower_api
+        activity = derive_activity(api.status, api.return_pending, api.task_pending)
+        return activity in (ACTIVITY_MOWING, ACTIVITY_RETURNING)
+
+    async def async_poll_position(self) -> None:
+        """Follow the mower's position while it mows.
+
+        The mower streams its position every two seconds only while the app
+        is open (protocol 702). Without that stream the position is asked
+        every few seconds, so the track follows the lanes instead of joining
+        positions a minute apart. Only the position is used; the other
+        values keep their minute.
+        """
+        while True:
+            interval = POSITION_IDLE_CHECK
+            stream_fresh = (
+                self._stream_pose_at is not None
+                and time.monotonic() - self._stream_pose_at < POSITION_STREAM_FRESH
+            )
+            if self._drives() and not stream_fresh:
+                local = getattr(self.mower_api.channel, "is_local_connected", False)
+                interval = POSITION_INTERVAL if local else POSITION_INTERVAL_CLOUD
+                try:
+                    answer = await _quietly(self.mower_api.get_robot_status(record=False))
+                    if (pose := pose_from_status(answer)) is not None:
+                        self.note_pose(pose)
+                except Exception:
+                    # Never let one odd answer end the position updates.
+                    _LOGGER.exception("[%s] Reading the position failed", self.device.duid)
+            await asyncio.sleep(interval)
 
     @callback
     def note_pose(self, pose: Pose) -> None:

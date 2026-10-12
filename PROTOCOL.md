@@ -334,15 +334,25 @@ metres in the mower's own map frame (no geographic position):
 |-------|---------|
 | 1 | `{2: id}` (a millisecond timestamp) |
 | 4 | map info: 3 height, 4 width (pixels), 5 resolution (m), 6 origin y, 7 origin x — the same as the status' `navigation.rgb_map_info` |
-| 10 | a mowing area (repeated): 1 id, 4 boundary points `{4 x, 5 y}` (repeated), 5 short name (`A1`), 7 zone `{1 id, 3 name, 4 area m², 5 time s, 6 points, 11 created}`, 8 area m², 9 time s, 12 segments `{1 index, 4 first point, 5 last point, 6 type}` (meaning open) |
+| 10 | a mowing area (repeated): 1 id, 4 boundary points `{4 x, 5 y}` (repeated), 5 short name (`A1`), 7 zone `{1 id, 3 name, 4 area m², 5 time s, 6 points, 11 created, 12 edge segments}`, 8 area m², 9 time s, 11 changed (`2026-10-12-15-37-28`), 12 segments `{1 id, 2 (1), 4 first point, 5 last point, 6 type (2)}` (meaning open) |
 | 20 | poses `{4 x, 5 y, 6 yaw}`: 1 mower, 2 charging station |
 | 29 / 30 | lawn area (m²) / expected mowing time (s) |
 | 31 / 32 | 500.0 / 700.0 (rated / maximum area?) |
-| 33 | zone list `{1 {1 id, 2 name, 3 bytes}}` |
+| 33 | zone list `{1 {1 id, 2 name, 3 bytes}}` — the names the app shows |
 | 34 | time the map file changed (`2026-10-09-12-36-43`), the same as the status' `map_abstracts[].file_change_time` |
 
 The integration reads it at start and when `map_abstracts[0].file_change_time`
 of the status changes, and draws it as SVG (`image` entity, north up).
+
+**After the start of a run** the mower rewrites the map (13 kB instead of
+1.6 kB on the Q105): the zone's own name (10 → 7 → 3) is then only the short
+name (`A1`), the name the app shows stays in the zone list (33), so names are
+taken from there. The zone's boundary (10 → 7 → 6) gets dense (several
+hundred points), and the zone gains edge segments (10 → 7 → 12, repeated)
+`{1 id, 2 (1), 3 points {4 x, 5 y, 6 yaw} (repeated), 4 first point, 5 last
+point, 6 type (2)}`: stretches of the boundary by index into its points, with
+their own points (the edge the mower drives?). The integration does not draw
+them yet.
 
 **Status stream (protocol 702).** While mowing, the mower sends its status
 every 2 seconds as a protocol-702 message: `PB` + protobuf, the same status as
@@ -352,6 +362,13 @@ every 2 seconds as a protocol-702 message: `PB` + protobuf, the same status as
 holds the **GPS position as 64-bit doubles**: the integration never reads
 64-bit values from these messages, and `save_map_data` shows every 64-bit value
 as `**REDACTED**`.
+
+On the Q105 the stream came only while the Roborock app was open; with the
+app closed, a run brought no 702 messages. Without the stream the
+integration asks `GET_ROBOT_STATUS` every 5 seconds while the mower mows or
+returns (every 15 seconds when only the cloud connection is up) and only
+uses its position, so the track follows the lanes. Positions more than 3 m
+apart are not joined by a line.
 
 ---
 

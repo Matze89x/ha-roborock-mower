@@ -68,6 +68,15 @@ MAP_TIMEOUT = 30.0
 # Live positions: while mowing the mower sends its status every 2 seconds;
 # the map picture follows at most this often (it is redrawn per view).
 MAP_IMAGE_MIN_INTERVAL = 10.0
+# While mowing, the mower's position is asked this often (seconds) when its
+# live status stream (sent while the app is open) does not come; less often
+# when only the cloud connection is up.
+POSITION_INTERVAL = 5.0
+POSITION_INTERVAL_CLOUD = 15.0
+# How often to check whether the mower started mowing, and how long a stream
+# position counts as current.
+POSITION_IDLE_CHECK = 10.0
+POSITION_STREAM_FRESH = 15.0
 # The track of a run starts anew after the mower was this long without a
 # position change (a recharge in the middle of a run is shorter).
 TRACK_RESET_GAP = timedelta(hours=3)

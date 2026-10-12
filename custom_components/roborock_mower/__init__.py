@@ -218,7 +218,7 @@ def _make_push_handler(
             pose := pose_from_stream(getattr(message, "payload", None))
         ) is not None:
             # Live position while mowing (the frame's GPS is never read).
-            coordinator.hass.loop.call_soon_threadsafe(coordinator.note_pose, pose)
+            coordinator.hass.loop.call_soon_threadsafe(coordinator.note_stream_pose, pose)
         if mower_api.note_message(protocol) and protocol not in _KEEPALIVE_PROTOCOLS:
             payload = getattr(message, "payload", None) or b""
             _LOGGER.debug(
@@ -751,6 +751,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: MowerConfigEntry) -> boo
             hass,
             coordinator.async_poll_robot_status(),
             f"{DOMAIN}_robot_status_{coordinator.device.duid}",
+        )
+        entry.async_create_background_task(
+            hass,
+            coordinator.async_poll_position(),
+            f"{DOMAIN}_position_{coordinator.device.duid}",
         )
     return True
 

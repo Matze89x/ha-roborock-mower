@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import copy
 from datetime import timedelta
+from itertools import pairwise
 import json
 import time
 from typing import Any
 from types import SimpleNamespace
+from unittest.mock import patch
 from xml.etree import ElementTree
 
 import pytest
@@ -44,7 +47,16 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.roborock_mower.const import DOMAIN
 
 from .conftest import MOWER_DUID, FakeChannel, FakeMessage
-from .protobuf import LAWN, MAP, STREAM_FRAME, stream_frame, sub, text
+from .protobuf import (
+    LAWN,
+    MAP,
+    STREAM_FRAME,
+    map_message,
+    stream_frame,
+    sub,
+    text,
+    varint,
+)
 from .test_robot_status import LIVE_STATUS, _answering, _entity_id, _setup, _wait_until
 
 # -- decoding --------------------------------------------------------------------
@@ -117,7 +129,8 @@ def test_readable_frames_hide_the_gps_position() -> None:
 
 
 def test_the_map_is_drawn() -> None:
-    view = MapView(parse_map(MAP), Pose(5.0, 4.0, 0.0), [(1.0, 1.0), (5.0, 4.0)])
+    track = [(1.0, 1.0), (3.0, 2.0), (5.0, 4.0)]
+    view = MapView(parse_map(MAP), Pose(5.0, 4.0, 0.0), track)
     svg = render_svg(view).decode()
     root = ElementTree.fromstring(svg)
     # The map frame: 240 x 200 pixels of 5 cm.
@@ -347,4 +360,64 @@ async def test_map_options(
     assert b"Wiese" not in picture
     assert b" m</text>" in picture
     assert hass.states.get(image).attributes["layers"] == ["track", "dock", "mower", "grid"]
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+def test_zone_names_come_from_the_zone_list() -> None:
+    """After the mower rewrote the map, the zone itself only says "A1"."""
+    rewritten = map_message("A1", sub(33, sub(1, varint(1, 2), text(2, "Garten"))))
+    assert [zone.name for zone in parse_map(rewritten).zones] == ["Garten"]
+    # Without a zone list the zone's own name is used.
+    assert [zone.name for zone in parse_map(MAP).zones] == ["Wiese <hinten>"]
+
+
+def test_far_apart_positions_are_not_joined() -> None:
+    """Positions a minute apart would draw lines across the lawn."""
+    track = [(1.0, 1.0), (2.0, 1.0), (3.0, 1.0), (9.0, 6.0), (9.5, 6.0)]
+    root = ElementTree.fromstring(render_svg(MapView(parse_map(MAP), None, track)))
+    lines = [child.get("points") for child in root if child.tag.endswith("polyline")]
+    assert len(lines) == 2
+    assert lines[0].count(" ") == 2 and lines[1].count(" ") == 1
+
+
+async def test_position_followed_while_mowing_without_stream(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    """Without the app's live stream the position is asked every few seconds."""
+    status = copy.deepcopy(LIVE_STATUS)
+    asked: list[str] = []
+    answer = _answering(asked, status)
+
+    async def _send(method: str, params: dict | None = None) -> object:
+        if (params or {}).get("type") == "GET_ROBOT_STATUS":
+            # The mower drives 40 cm between two questions.
+            pose = status["navigation"]["map"]["robot_pose"]
+            pose["f_x"] = round(pose["f_x"] + 0.4, 4)
+        return await answer(method, params)
+
+    channel.rpc_channel.send_command.side_effect = _send
+    channel.map_rpc_channel.send_command.side_effect = _map_channel([MAP], [])
+    with (
+        patch("custom_components.roborock_mower.coordinator.POSITION_INTERVAL", 0.01),
+        patch("custom_components.roborock_mower.coordinator.POSITION_INTERVAL_CLOUD", 0.01),
+        patch("custom_components.roborock_mower.coordinator.POSITION_IDLE_CHECK", 0.01),
+    ):
+        await _setup(hass, config_entry)
+        coordinator = config_entry.runtime_data.coordinators[0]
+        await _wait_until(hass, lambda: coordinator.mower_map is not None)
+        # Docked: no extra questions, no track.
+        await hass.async_block_till_done()
+        assert coordinator.track == []
+        channel.callback(FakeMessage(b'{"dps":{"123":55,"127":0}}'))
+        await _wait_until(hass, lambda: len(coordinator.track) >= 4)
+        # The lanes come as one line, not as jumps.
+        steps = [abs(b[0] - a[0]) for a, b in pairwise(coordinator.track)]
+        assert all(step == pytest.approx(0.4, abs=0.01) for step in steps)
+
+        # The app opened: its stream brings the position, the polling pauses.
+        coordinator.note_stream_pose(Pose(9.0, 9.0, 0.0))
+        before = asked.count("GET_ROBOT_STATUS")
+        for _ in range(5):
+            await asyncio.sleep(0.02)
+        assert asked.count("GET_ROBOT_STATUS") == before
     assert await hass.config_entries.async_unload(config_entry.entry_id)
