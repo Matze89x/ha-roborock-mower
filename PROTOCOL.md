@@ -335,7 +335,7 @@ metres in the mower's own map frame (no geographic position):
 | 1 | `{2: id}` (a millisecond timestamp) |
 | 4 | map info: 3 height, 4 width (pixels), 5 resolution (m), 6 origin y, 7 origin x — the same as the status' `navigation.rgb_map_info` |
 | 10 | a mowing area (repeated): 1 id, 4 boundary points `{4 x, 5 y}` (repeated), 5 short name (`A1`), 7 zone `{1 id, 3 name, 4 area m², 5 time s, 6 points, 11 created, 12 edge segments}`, 8 area m², 9 time s, 11 changed (`2026-10-12-15-37-28`), 12 segments `{1 id, 2 (1), 4 first point, 5 last point, 6 type (2)}` (meaning open) |
-| 20 | poses `{4 x, 5 y, 6 yaw}`: 1 mower, 2 charging station |
+| 20 | poses `{4 x, 5 y, 6 yaw}`: 1 mower, 2 charging station (the garage's entrance: a docked mower stands about 0.75 m ahead of it, looking along its yaw into the garage) |
 | 29 / 30 | lawn area (m²) / expected mowing time (s) |
 | 31 / 32 | 500.0 / 700.0 (rated / maximum area?) |
 | 33 | zone list `{1 {1 id, 2 name, 3 bytes}}` — the names the app shows |

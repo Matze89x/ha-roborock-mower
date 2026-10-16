@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 import json
 import logging
 from pathlib import Path
@@ -369,8 +369,6 @@ def test_sensor_values_from_the_live_status() -> None:
         "status_updated": datetime(2026, 10, 9, 8, 17, tzinfo=UTC),
         "boundary_perception": "intelligence",
         "plan_count": 3,
-        "last_fault": 35,
-        "last_fault_date": date(2026, 10, 2),
         "rain_state": "rain_no",
         "anti_theft_range": 100,
         "navigation_mode": "more_coverage",
@@ -382,9 +380,9 @@ def test_sensor_values_from_the_live_status() -> None:
         "battery_capacity": 4,
     }
     assert by_key_attrs(info, "plan_count") == {"zones": {"Garten": 3}}
-    assert by_key_attrs(info, "last_fault") == {
-        "date": "2026-10-02",
-        "task": "mow",
+    assert by_key_attrs(info, "fault_count") == {
+        "last_code": 35,
+        "last_date": "2026-10-02",
         "faults": [
             {"code": 35, "count": 3, "last": "2026-10-02", "task": "mow"},
             {"code": 16, "count": 2, "last": "2026-09-30", "task": "runtime"},
@@ -468,8 +466,6 @@ def test_no_faults_and_no_plans_read_as_zero() -> None:
     values = {desc.key: desc.value_fn(info) for desc in ROBOT_STATUS_SENSORS}
     assert values["fault_count"] == 0
     assert values["plan_count"] == 0
-    assert values["last_fault"] is None
-    assert values["last_fault_date"] is None
 
 
 @pytest.mark.parametrize(
@@ -599,7 +595,7 @@ async def test_status_entities_follow_the_mower(
         config_entry,
         ("sensor", "lawn_area"),
         ("sensor", "plan_count"),
-        ("sensor", "last_fault"),
+        ("sensor", "fault_count"),
     )
     await _setup(hass, config_entry)
 
@@ -626,7 +622,9 @@ async def test_status_entities_follow_the_mower(
         == "off"
     )
     assert hass.states.get(_entity_id(hass, "sensor", "plan_count")).state == "3"
-    assert hass.states.get(_entity_id(hass, "sensor", "last_fault")).state == "35"
+    fault_count = hass.states.get(_entity_id(hass, "sensor", "fault_count"))
+    assert fault_count.state == "5"
+    assert fault_count.attributes["last_code"] == 35
     assert hass.states.get(_entity_id(hass, "switch", "rain_protection")).state == "on"
     # The exact model from the mower's product details.
     [device] = dr.async_entries_for_config_entry(

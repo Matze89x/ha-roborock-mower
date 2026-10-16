@@ -8,6 +8,7 @@ import copy
 from datetime import timedelta
 from itertools import pairwise
 import json
+import math
 import time
 from typing import Any
 from types import SimpleNamespace
@@ -164,8 +165,13 @@ def test_map_layers_can_be_switched() -> None:
     # the mower drawn where the map file saw it, the station next to it.
     assert "5 m</text>" in svg
     assert svg.count("<g ") == 2
-    # On the station the mower hides it.
-    docked = MapView(mower_map, Pose(0.5, 0.5, -1.0), [])
+    # Docked, the mower stands 0.75 m ahead of the dock position and hides
+    # the station.
+    dock = mower_map.dock
+    spot = Pose(
+        dock.x + 0.75 * math.cos(dock.yaw), dock.y + 0.75 * math.sin(dock.yaw), dock.yaw
+    )
+    docked = MapView(mower_map, spot, [])
     assert render_svg(docked).decode().count("<g ") == 1
 
 
@@ -421,3 +427,21 @@ async def test_position_followed_while_mowing_without_stream(
             await asyncio.sleep(0.02)
         assert asked.count("GET_ROBOT_STATUS") == before
     assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+def test_the_garage_place_reaches_in_front_and_to_the_sides() -> None:
+    """Like in the app: 1 m beyond the docked mower, but not behind it."""
+    from custom_components.roborock_mower.map_data import _station_place
+
+    # Scale 1, the dock heading east (x): the place in metres around the dock.
+    rect = ElementTree.fromstring(
+        _station_place(0.0, 0.0, 0.0, 0.01).replace("<rect", '<rect xmlns="http://www.w3.org/2000/svg"')
+    )
+    left, width = float(rect.get("x")), float(rect.get("width"))
+    top, height = float(rect.get("y")), float(rect.get("height"))
+    # The docked mower (1 m long) stands 0.75 m ahead: its rear at 0.25 m,
+    # its front at 1.25 m.
+    assert left == pytest.approx(0.25 - 1.0)
+    assert left + width == pytest.approx(1.25 + 0.1)
+    assert top == pytest.approx(-(0.37 + 0.9))
+    assert height == pytest.approx(2 * (0.37 + 0.9))
