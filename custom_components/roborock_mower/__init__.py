@@ -783,6 +783,10 @@ def _remove_retired_entities(hass: HomeAssistant, runtime: MowerRuntimeData) -> 
         ("binary_sensor", "passage_camera_avoidance"),
         ("binary_sensor", "obstacle_photo_privacy"),
         ("sensor", "rain_delay"),
+        # 0.5.4: the last fault (code, date) stayed on an old entry and read
+        # like a current error; the history is an attribute of the count.
+        ("sensor", "last_fault"),
+        ("sensor", "last_fault_date"),
     )
     for coordinator in runtime.coordinators:
         for platform, key in retired:

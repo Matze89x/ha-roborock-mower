@@ -3,6 +3,33 @@
 Source of the release notes: each version's section becomes the text of its
 [GitHub release](https://github.com/Matze89x/ha-roborock-mower/releases).
 
+## 0.5.4 – Garage on the map, fault sensors removed
+
+**Kurzfassung (Deutsch):** Die Garage auf der Karte sitzt jetzt wie in der
+App: Hugo steht hinten im Platz, der Platz reicht etwa 1 m nach vorn und zu
+den Seiten, aber nicht nach hinten, und ist dunkel mit gestricheltem Rand.
+Vorher war er um die Ladeposition zentriert, und der Mäher ragte hinten
+heraus. Die beiden Sensoren „Letzter Fehler (Code)“ und „Letzter Fehler am“
+entfallen: Sie zeigten dauerhaft den Fehler 35 vom 2. Oktober aus dem
+Fehlerverlauf und wirkten wie ein aktueller Fehler. Den Verlauf gibt es
+weiter als Attribute der (standardmäßig ausgeschalteten) „Fehleranzahl“.
+Plan- und Einstellungsschalter fragen einmal nach, wenn der Mäher auf einen
+Befehl nicht in 10 Sekunden antwortet.
+
+### Fixes
+
+- Map: the garage place is drawn in the station's frame (the dock position is
+  its entrance, a docked mower stands 0.75 m ahead of it): about 1 m beyond the
+  mower in front and 0.9 m to the sides, 0.1 m behind; dark with a dashed edge.
+  The station plate is drawn where the mower docks.
+- Plan and setting switches: a command or read that timed out is sent once
+  more (the whole value is sent each time, so it is harmless).
+
+### Changes
+
+- Removed the sensors "Last fault (code)" and "Last fault date" (the history
+  is an attribute of "Fault count").
+
 ## 0.5.3 – Map fixes from a live run
 
 **Kurzfassung (Deutsch):** Die Karte sah beim Mähen seltsam aus – das ist

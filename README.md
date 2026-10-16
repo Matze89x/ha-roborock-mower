@@ -40,7 +40,7 @@ Was sich in welcher Version geändert hat, steht in den
   geschätzte Mähdauer, nächster geplanter Mähvorgang, letztes Mähen (Beginn, Ende,
   Dauer, Fläche, Abdeckung, Endgrund, abgebrochen ja/nein); unter **Diagnose**
   WLAN-Signal, Verbindungsweg, Mobilfunk (4G), RTK-Positionsbestimmung, letztes
-  Ereignis, letzter Fehler (Code und Datum aus dem Fehlerverlauf), ob die
+  Ereignis, Fehlerverlauf (Anzahl, mit den einzelnen Fehlern als Attribut; standardmäßig aus), ob die
   Nicht-stören-Zeit gerade läuft, Anzahl der Mähpläne; das Gerät zeigt das genaue Modell (z. B.
   RockNeo Q105). Viele weitere Werte (WLAN-Qualität, RTK-Modus, LoRa, Diebstahlschutz,
   Energie- und Systemzustände, Karte, Mäheinstellungen wie die Randerkennung,
@@ -154,7 +154,7 @@ Daten über das Issue-Formular **„Mäher-Daten teilen“** beisteuern.
 ## Karte
 
 Die Entität **Karte** (`image.<mäher>_karte`) zeigt die Karte im Stil der App:
-dunkelgrüner Rasen mit Zonennamen, der helle Stellplatz der Ladestation, der
+dunkelgrüner Rasen mit Zonennamen, der dunkle Platz der Garage, der
 Mäher von oben in Fahrtrichtung und seine Fahrspur als weiße Linien. Die Karte holt die Integration beim
 Start und immer dann, wenn der Mäher eine geänderte Karte meldet (über die
 Cloud, wie die App). Die Position fragt die Integration beim Mähen alle 5
@@ -226,7 +226,7 @@ What changed in which version is listed in the
   area, estimated mowing time, next scheduled mow, last mow (start, end,
   duration, area, coverage, end reason, aborted yes/no); under **Diagnostic**
   Wi-Fi signal, connection route, mobile network (4G), RTK positioning, last
-  event, last fault (code and date from the fault history), whether the
+  event, fault history (count, the single faults as an attribute; off by default), whether the
   do-not-disturb time is now, number of schedules; the device shows the exact model (e.g. RockNeo Q105).
   Many more values (Wi-Fi quality, RTK mode, LoRa, anti-theft, energy and
   system states, map, mowing preferences such as boundary perception, obstacle

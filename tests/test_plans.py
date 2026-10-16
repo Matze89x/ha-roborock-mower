@@ -168,3 +168,27 @@ async def test_a_plan_change_the_mower_does_not_take_is_an_error(
     assert len(sent) == 1
     assert hass.states.get(morning).state == "on"
     assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_a_lost_answer_is_asked_again_once(
+    hass: HomeAssistant, config_entry: MockConfigEntry, channel: FakeChannel
+) -> None:
+    sent: list[dict[str, Any]] = []
+    schedule = copy.deepcopy(SCHEDULE)
+    working = _mower(sent, schedule)
+    lost = {"left": 1}
+
+    async def _send(method: str, params: dict | None = None) -> object:
+        if (params or {}).get("type") == "CHANGE_MOWING_PLAN" and lost["left"]:
+            lost["left"] -= 1
+            raise RoborockException("Command timed out after 10.0s")
+        return await working(method, params)
+
+    channel.rpc_channel.send_command.side_effect = _send
+    await _setup(hass, config_entry)
+    await _wait_until(hass, lambda: _plan_entity(hass, 11) is not None)
+    morning = _plan_entity(hass, 11)
+    await _wait_until(hass, lambda: hass.states.get(morning) is not None)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": morning}, blocking=True)
+    assert hass.states.get(morning).state == "off"
+    assert await hass.config_entries.async_unload(config_entry.entry_id)

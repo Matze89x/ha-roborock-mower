@@ -380,7 +380,8 @@ _COLORS = {
     "lawn_edge": "#e9f5e3",
     "track": "#ffffff",
     "grid": "#8a8a8a",
-    "station_place": "#ffffff",
+    "station_place": "#1f2a1f",
+    "station_place_edge": "#ffffff",
     "station": "#4a4a4a",
     "mower_body": "#3b3b3b",
     "mower_top": "#5c5c5c",
@@ -418,7 +419,15 @@ def map_layers_from_options(options: Mapping[str, Any]) -> dict[str, bool]:
 _MOWER_LENGTH, _MOWER_WIDTH = 1.0, 0.74
 # Track positions further apart than this (metres) are not joined by a line.
 TRACK_MAX_GAP = 3.0
-_STATION_PLACE = 1.9
+# The garage place, in the station's frame (x along the dock's heading, which
+# is where a docked mower looks, into the garage). The dock position lies at the
+# garage's entrance: a docked mower stands _DOCKED_AHEAD ahead of it, flush
+# with the back. Like in the app the place reaches 1 m beyond the mower in
+# front and about as far to both sides, and not behind it.
+_DOCKED_AHEAD = 0.75
+_PLACE_BEHIND = 0.1
+_PLACE_FRONT = 1.0
+_PLACE_SIDE = 0.9
 
 
 @dataclass(slots=True)
@@ -553,9 +562,11 @@ def render_svg(view: MapView) -> bytes:
     robot = view.robot or view.map.robot
     show_mower = view.shows("mower") and robot is not None
     if view.shows("dock") and dock is not None:
-        # The station itself, unless the mower stands on it.
-        if not show_mower or math.hypot(robot.x - dock.x, robot.y - dock.y) > 0.6:
-            parts.append(_station(x_of(dock.x), y_of(dock.y), dock.yaw, unit))
+        # The station where the mower docks, unless the mower stands there.
+        scale = max(1.0, unit * 3.5 / _MOWER_LENGTH)
+        spot_x, spot_y = _docked_spot(dock, scale)
+        if not show_mower or math.hypot(robot.x - spot_x, robot.y - spot_y) > 0.6 * scale:
+            parts.append(_station(x_of(spot_x), y_of(spot_y), dock.yaw, unit))
     if show_mower:
         parts.append(_mower(x_of(robot.x), y_of(robot.y), robot.yaw, unit))
     parts.append("</svg>")
@@ -587,13 +598,30 @@ def _turned(x: float, y: float, yaw: float | None) -> str:
     return f'transform="translate({x:.3f} {y:.3f}) rotate({degrees:.1f})"'
 
 
-def _station_place(x: float, y: float, yaw: float | None, unit: float) -> str:
-    """The light place around the charging station."""
-    size = max(_STATION_PLACE, unit * 7)
+def _docked_spot(dock: Pose, scale: float) -> tuple[float, float]:
+    """Where a docked mower stands: ahead of the dock position, in its heading."""
+    yaw = dock.yaw or 0.0
     return (
-        f'<rect {_turned(x, y, yaw)} x="{-size / 2:.3f}" y="{-size / 2:.3f}" '
-        f'width="{size:.3f}" height="{size:.3f}" rx="{size * 0.18:.3f}" '
-        f'fill="{_COLORS["station_place"]}" fill-opacity="0.4"/>'
+        dock.x + math.cos(yaw) * _DOCKED_AHEAD * scale,
+        dock.y + math.sin(yaw) * _DOCKED_AHEAD * scale,
+    )
+
+
+def _station_place(x: float, y: float, yaw: float | None, unit: float) -> str:
+    """The dark place of the garage, around where the mower docks.
+
+    ``(x, y)`` is the dock position (the garage's entrance).
+    """
+    scale = max(1.0, unit * 3.5 / _MOWER_LENGTH)
+    back = (_DOCKED_AHEAD + _MOWER_LENGTH / 2 + _PLACE_BEHIND) * scale
+    front = (_DOCKED_AHEAD - _MOWER_LENGTH / 2 - _PLACE_FRONT) * scale
+    half = (_MOWER_WIDTH / 2 + _PLACE_SIDE) * scale
+    return (
+        f'<rect {_turned(x, y, yaw)} x="{front:.3f}" y="{-half:.3f}" '
+        f'width="{back - front:.3f}" height="{2 * half:.3f}" rx="{0.35 * scale:.3f}" '
+        f'fill="{_COLORS["station_place"]}" fill-opacity="0.85" '
+        f'stroke="{_COLORS["station_place_edge"]}" stroke-opacity="0.55" '
+        f'stroke-width="{unit * 0.08:.3f}" stroke-dasharray="{unit * 0.5:.3f} {unit * 0.35:.3f}"/>'
     )
 
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import date
 import logging
 from typing import Any
 
@@ -341,26 +340,12 @@ def _faults(info: RobotInfo) -> list[dict[str, Any]] | None:
     return faults
 
 
-def _last_fault(info: RobotInfo) -> Any:
-    faults = _faults(info)
-    return faults[0]["code"] if faults else None
-
-
-def _last_fault_attrs(info: RobotInfo) -> dict[str, Any] | None:
+def _fault_attrs(info: RobotInfo) -> dict[str, Any] | None:
+    """The history behind the count: latest fault first (code, count, date, task)."""
     faults = _faults(info)
     if not faults:
         return None
-    return {"date": faults[0]["last"], "task": faults[0]["task"], "faults": faults}
-
-
-def _last_fault_date(info: RobotInfo) -> date | None:
-    faults = _faults(info)
-    if not faults or not faults[0]["last"]:
-        return None
-    try:
-        return date.fromisoformat(faults[0]["last"])
-    except ValueError:
-        return None
+    return {"last_code": faults[0]["code"], "last_date": faults[0]["last"], "faults": faults}
 
 
 def _fault_count(info: RobotInfo) -> int | None:
@@ -599,22 +584,6 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         entity_category=_DIAGNOSTIC,
         value_fn=_while_working("hardware", "wheel", "linear_velocity"),
     ),
-    RobotStatusSensorDescription(
-        key="last_fault",
-        translation_key="last_fault",
-        entity_category=_DIAGNOSTIC,
-        icon="mdi:alert-octagon-outline",
-        value_fn=_last_fault,
-        attrs_fn=_last_fault_attrs,
-    ),
-    RobotStatusSensorDescription(
-        key="last_fault_date",
-        translation_key="last_fault_date",
-        device_class=SensorDeviceClass.DATE,
-        entity_category=_DIAGNOSTIC,
-        icon="mdi:calendar-alert",
-        value_fn=_last_fault_date,
-    ),
     # -- diagnostic, disabled by default ----------------------------------------
     RobotStatusSensorDescription(
         key="wifi_quality",
@@ -777,6 +746,7 @@ ROBOT_STATUS_SENSORS: list[RobotStatusSensorDescription] = [
         translation_key="fault_count",
         icon="mdi:counter",
         value_fn=_fault_count,
+        attrs_fn=_fault_attrs,
     ),
     RobotStatusSensorDescription(
         key="positioning",

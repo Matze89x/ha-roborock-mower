@@ -23,6 +23,7 @@ from datetime import datetime
 import json
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 try:
@@ -933,6 +934,21 @@ class MowerApi:
             self.preference_config["global"] = pref
         return result
 
+    async def _twice(self, call: Callable[[], Awaitable[Any]]) -> Any:
+        """Run a call to the mower again once if it timed out.
+
+        A command that was lost on the way (the mower answered nothing within
+        the timeout) is the usual failure; the settings and plan commands send
+        the whole value, so sending them again is harmless.
+        """
+        try:
+            return await call()
+        except RoborockException as err:
+            if "timed out" not in str(err):
+                raise
+            _LOGGER.debug("[%s] No answer, asking again: %s", self._duid, err)
+            return await call()
+
     async def set_user_mode(self, part: str, **changes: Any) -> dict[str, Any]:
         """Change fields of one part of the settings (rain, do not disturb, ...).
 
@@ -943,12 +959,18 @@ class MowerApi:
         private fields: callers redact them).
         """
         command = USER_MODE_COMMANDS[part]
-        before = await self.get_info(TYPE_GET_USER_MODE_CONFIG, record=False)
+        before = await self._twice(
+            lambda: self.get_info(TYPE_GET_USER_MODE_CONFIG, record=False)
+        )
         current = (before or {}).get("user_mode_config", {}).get(part)
         if not isinstance(current, dict):
             raise RoborockException(f"Could not read {part} from the mower")
-        await self._send_remote_msg({"type": command, part: {**current, **changes}})
-        after = await self.get_info(TYPE_GET_USER_MODE_CONFIG, record=False)
+        await self._twice(
+            lambda: self._send_remote_msg({"type": command, part: {**current, **changes}})
+        )
+        after = await self._twice(
+            lambda: self.get_info(TYPE_GET_USER_MODE_CONFIG, record=False)
+        )
         applied = (after or {}).get("user_mode_config", {}).get(part)
         if not isinstance(applied, dict) or any(
             _proto_value(applied.get(key)) != _proto_value(value)
@@ -965,14 +987,23 @@ class MowerApi:
         again to confirm. Returns the new ``GET_MOW_SCHEDULE`` answer.
         """
         status = PLAN_OPEN if open_ else PLAN_CLOSED
-        before = await self.get_info(TYPE_GET_MOW_SCHEDULE, record=False)
+        before = await self._twice(
+            lambda: self.get_info(TYPE_GET_MOW_SCHEDULE, record=False)
+        )
         plan = find_plan(before, plan_id)
         if plan is None:
             raise RoborockException(f"Mowing plan {plan_id} not found on the mower")
-        await self._send_remote_msg(
-            {"type": TYPE_CHANGE_MOWING_PLAN, "mowing_plan": {**plan, "status": status}}
+        await self._twice(
+            lambda: self._send_remote_msg(
+                {
+                    "type": TYPE_CHANGE_MOWING_PLAN,
+                    "mowing_plan": {**plan, "status": status},
+                }
+            )
         )
-        after = await self.get_info(TYPE_GET_MOW_SCHEDULE, record=False)
+        after = await self._twice(
+            lambda: self.get_info(TYPE_GET_MOW_SCHEDULE, record=False)
+        )
         changed = find_plan(after, plan_id)
         if changed is None or changed.get("status") != status:
             raise MowerSettingNotApplied(f"The mower kept mowing plan {plan_id}")
